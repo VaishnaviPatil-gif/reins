@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          PAYPAL_CLIENT_ID: "ci-placeholder"
+          PAYPAL_CLIENT_SECRET: "ci-placeholder"
+          GEMINI_API_KEY: "ci-placeholder"
+          REINS_SIGNING_SECRET: "ci-placeholder-secret-32-chars-xx"
+        run: pytest -v

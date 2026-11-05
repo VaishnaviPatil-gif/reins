@@ -218,3 +218,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# SQLite DB files
+*.db
+*.db-shm
+*.db-wal
+reins.db
+
+# Secrets — never commit real .env
+.env
+backend/.env
+
+# Python test/cache artifacts
+.pytest_cache/
+__pycache__/
+*.pyc

@@ -1,0 +1,31 @@
+services:
+  # Backend FastAPI service
+  - type: web
+    name: reins-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: REINS_SIGNING_SECRET
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite:///./reins.db
+    healthCheckPath: /health
+
+  # Frontend static site
+  - type: web
+    name: reins-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
