@@ -10,6 +10,7 @@ from app.database import engine, SessionLocal, Base
 from app.models import *  # noqa: F401, F403 — ensure all models are registered before create_all
 from app.seed import seed
 from app.routers import health as health_router
+from app.routers import mandates as mandates_router
 
 
 @asynccontextmanager
@@ -40,6 +41,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router.router)
+app.include_router(mandates_router.router)
 
 
 @app.get("/", tags=["meta"])

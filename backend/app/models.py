@@ -52,6 +52,8 @@ class Mandate(Base):
     valid_until = Column(DateTime(timezone=True), nullable=True)
     status = Column(String, default="active")              # active | revoked
     token = Column(Text, nullable=True)                    # signed JWT
+    vault_id = Column(String, nullable=True)               # PayPal vault payment token (enables server-side charges)
+    paypal_link_order_id = Column(String, nullable=True)   # Order used for the one-time Link PayPal approval
     created_at = Column(DateTime(timezone=True), default=_now)
     user = relationship("User", back_populates="mandates")
     agent = relationship("Agent", back_populates="mandates")

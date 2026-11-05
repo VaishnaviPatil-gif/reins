@@ -6,19 +6,28 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
+from app.seed import seed
 
 # In-memory SQLite for tests — isolated, never touches reins.db
-TEST_DB_URL = "sqlite://"
+TEST_DB_URL = "sqlite:///:memory:"
 
 @pytest.fixture(scope="function")
 def test_client():
-    engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+    engine = create_engine(
+        TEST_DB_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+
+    with TestingSessionLocal() as session:
+        seed(session)
 
     def override_get_db():
         db = TestingSessionLocal()
