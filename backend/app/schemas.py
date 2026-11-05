@@ -1,6 +1,5 @@
 """
 Pydantic v2 schemas for request/response validation.
-One file for now — split by domain if they grow beyond ~200 lines.
 """
 from __future__ import annotations
 from datetime import datetime
@@ -69,32 +68,72 @@ class MandateOut(BaseModel):
 
 
 class MandateLinkStart(BaseModel):
-    """Returned when starting the Link PayPal flow."""
     order_id: str
     approve_url: str
     instructions: str
 
 
 class MandateLinkConfirm(BaseModel):
-    """Returned after successful vault capture."""
     mandate_id: int
     vault_id: str
     setup_charge: str
 
 
-# ── Receipts (stub — filled in Phase 4) ──────────────────────────────────────
+# ── Purchases & Receipts ─────────────────────────────────────────────────────
+
+class PurchaseAttemptRequest(BaseModel):
+    mandate_token: str
+    item: str
+    merchant: str
+    amount: float = Field(..., gt=0)
+    currency: str = "USD"
+    category: Optional[str] = None
+    agent_plan: Optional[str] = None
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
 
 class ReceiptOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     mandate_id: int
+    mandate_version: int
     agent_id: int
     item: str
     merchant: str
     amount: float
     currency: str
+    category_claimed: Optional[str]
+    category_verified: Optional[str]
+    agent_plan: Optional[str]
+    evidence: dict[str, Any]
     decision: str
+    reasons: list[str]
     injection_flag: bool
     paypal_order_id: Optional[str]
     paypal_capture_id: Optional[str]
+    prev_hash: Optional[str]
+    hash: Optional[str]
     created_at: datetime
+
+
+class PurchaseAttemptResponse(BaseModel):
+    decision: str  # approved | blocked | escalated
+    receipt: ReceiptOut
+    message: str
+    escalation_id: Optional[int] = None
+
+
+class EscalationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    receipt_id: int
+    status: str  # pending | approved | denied
+    resolved_at: Optional[datetime]
+    receipt: Optional[ReceiptOut] = None
+
+
+class ChainVerificationResponse(BaseModel):
+    valid: bool
+    total_receipts: int
+    broken_at_receipt_id: Optional[int] = None
+    reason: str
