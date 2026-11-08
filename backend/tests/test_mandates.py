@@ -151,6 +151,14 @@ def test_link_paypal_confirm_stores_vault_id(test_client):
     })
     mid = create_r.json()["id"]
 
+    mock_order = {
+        "id": "ORDER-123",
+        "links": [{"rel": "payer-action", "href": "https://paypal.com/approve/ORDER-123"}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.create_vault_setup_order", new_callable=AsyncMock, return_value=mock_order):
+        test_client.post(f"/mandates/{mid}/link-paypal")
+
     mock_capture = {
         "id": "ORDER-123",
         "status": "COMPLETED",
@@ -163,13 +171,146 @@ def test_link_paypal_confirm_stores_vault_id(test_client):
     }
     with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
          patch("app.routers.mandates.capture_order", new_callable=AsyncMock, return_value=mock_capture), \
-         patch("app.routers.mandates.refund_capture", new_callable=AsyncMock, return_value={}):
+         patch("app.routers.mandates.refund_capture", new_callable=AsyncMock, return_value={}) as mock_refund:
         r = test_client.get(f"/mandates/{mid}/link-confirm?token=ORDER-123")
 
     assert r.status_code == 200
     body = r.json()
     assert body["vault_id"] == "VAULT-ABC-123"
+    mock_refund.assert_awaited_once_with("tok", "CAP-XYZ", 1.00)
 
     get_r = test_client.get(f"/mandates/{mid}")
     assert get_r.json()["status"] == "active"
     assert get_r.json()["vault_id"] == "VAULT-ABC-123"
+
+    # Idempotency check: second confirm call returns active state without recapturing
+    with patch("app.routers.mandates.capture_order", new_callable=AsyncMock) as mock_capture_again:
+        r_again = test_client.get(f"/mandates/{mid}/link-confirm?token=ORDER-123")
+        assert r_again.status_code == 200
+        assert r_again.json()["message"] == "Mandate is already active."
+        assert r_again.json()["vault_id"] == "VAULT-ABC-123"
+        mock_capture_again.assert_not_called()
+
+
+def test_link_confirm_missing_token_rejected(test_client):
+    """Calling link-confirm without token query parameter returns 400."""
+    create_r = test_client.post("/mandates/", json={
+        "agent_id": 1, "budget_total": 50.0, "per_purchase_cap": 10.0,
+    })
+    mid = create_r.json()["id"]
+
+    mock_order = {
+        "id": "ORDER-123",
+        "links": [{"rel": "payer-action", "href": "https://paypal.com/approve/ORDER-123"}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.create_vault_setup_order", new_callable=AsyncMock, return_value=mock_order):
+        test_client.post(f"/mandates/{mid}/link-paypal")
+
+    r = test_client.get(f"/mandates/{mid}/link-confirm")
+    assert r.status_code == 400
+    assert "Missing required token" in r.json()["detail"]
+
+
+def test_link_confirm_mismatched_token_rejected(test_client):
+    """Calling link-confirm with token != mandate.paypal_link_order_id returns 400."""
+    create_r = test_client.post("/mandates/", json={
+        "agent_id": 1, "budget_total": 50.0, "per_purchase_cap": 10.0,
+    })
+    mid = create_r.json()["id"]
+
+    mock_order = {
+        "id": "ORDER-123",
+        "links": [{"rel": "payer-action", "href": "https://paypal.com/approve/ORDER-123"}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.create_vault_setup_order", new_callable=AsyncMock, return_value=mock_order):
+        test_client.post(f"/mandates/{mid}/link-paypal")
+
+    r = test_client.get(f"/mandates/{mid}/link-confirm?token=ORDER-WRONG")
+    assert r.status_code == 400
+    assert "Token mismatch" in r.json()["detail"]
+
+
+def test_link_confirm_vault_failure_triggers_refund(test_client):
+    """If capture succeeds but vault status != VAULTED, refund $1 and return 400 with vault block."""
+    create_r = test_client.post("/mandates/", json={
+        "agent_id": 1, "budget_total": 50.0, "per_purchase_cap": 10.0,
+    })
+    mid = create_r.json()["id"]
+
+    mock_order = {
+        "id": "ORDER-123",
+        "links": [{"rel": "payer-action", "href": "https://paypal.com/approve/ORDER-123"}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.create_vault_setup_order", new_callable=AsyncMock, return_value=mock_order):
+        test_client.post(f"/mandates/{mid}/link-paypal")
+
+    mock_capture = {
+        "id": "ORDER-123",
+        "status": "COMPLETED",
+        "payment_source": {
+            "paypal": {
+                "attributes": {"vault": {"id": "VAULT-PENDING", "status": "APPROVED"}}
+            }
+        },
+        "purchase_units": [{"payments": {"captures": [{"id": "CAP-REFUND-ME", "status": "COMPLETED"}]}}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.capture_order", new_callable=AsyncMock, return_value=mock_capture), \
+         patch("app.routers.mandates.refund_capture", new_callable=AsyncMock, return_value={}) as mock_refund:
+        r = test_client.get(f"/mandates/{mid}/link-confirm?token=ORDER-123")
+
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert detail["vault_status"] == "APPROVED"
+    assert detail["vault_block"]["status"] == "APPROVED"
+    assert detail["mandate_id"] == mid
+    mock_refund.assert_awaited_once_with("tok", "CAP-REFUND-ME", 1.00)
+
+    # Mandate remains pending_link and no vault_id stored
+    get_r = test_client.get(f"/mandates/{mid}")
+    assert get_r.json()["status"] == "pending_link"
+    assert get_r.json()["vault_id"] is None
+
+
+def test_link_confirm_vault_failure_refund_error(test_client):
+    """If vaulting fails and refund also fails, refund_error is reported in 400 response."""
+    create_r = test_client.post("/mandates/", json={
+        "agent_id": 1, "budget_total": 50.0, "per_purchase_cap": 10.0,
+    })
+    mid = create_r.json()["id"]
+
+    mock_order = {
+        "id": "ORDER-123",
+        "links": [{"rel": "payer-action", "href": "https://paypal.com/approve/ORDER-123"}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.create_vault_setup_order", new_callable=AsyncMock, return_value=mock_order):
+        test_client.post(f"/mandates/{mid}/link-paypal")
+
+    mock_capture = {
+        "id": "ORDER-123",
+        "status": "COMPLETED",
+        "payment_source": {
+            "paypal": {
+                "attributes": {}
+            }
+        },
+        "purchase_units": [{"payments": {"captures": [{"id": "CAP-REFUND-FAIL", "status": "COMPLETED"}]}}],
+    }
+    with patch("app.routers.mandates.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.mandates.capture_order", new_callable=AsyncMock, return_value=mock_capture), \
+         patch("app.routers.mandates.refund_capture", new_callable=AsyncMock, side_effect=Exception("PayPal refund rejected")):
+        r = test_client.get(f"/mandates/{mid}/link-confirm?token=ORDER-123")
+
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert detail["vault_status"] is None
+    assert "PayPal refund rejected" in detail["refund_error"]
+
+    get_r = test_client.get(f"/mandates/{mid}")
+    assert get_r.json()["status"] == "pending_link"
+    assert get_r.json()["vault_id"] is None
+

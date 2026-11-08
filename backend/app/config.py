@@ -13,8 +13,10 @@ class Settings(BaseSettings):
     paypal_client_secret: str = "SANDBOX_CLIENT_SECRET"
     paypal_base_url: str = "https://api-m.sandbox.paypal.com"
     gemini_api_key: str = "GEMINI_KEY"
+    gemini_model: str = "gemini-3.6-flash"
     reins_signing_secret: str = "change-me-32-chars-minimum-secret"
     database_url: str = "sqlite:///./reins.db"
+    public_base_url: str = "http://localhost:8000"
 
 
 @lru_cache

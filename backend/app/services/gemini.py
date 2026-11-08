@@ -2,7 +2,7 @@
 Gemini semantic policy evaluation using the google-genai SDK (v2+).
 
 Migrated from google-generativeai (deprecated) to google-genai.
-Model: gemini-2.0-flash — current stable Flash, replaces retired gemini-1.5-flash.
+Model configured via settings.gemini_model (default gemini-3.6-flash).
 
 Two evaluations per purchase attempt:
   1. Category fit: does the item actually belong to the allowed categories?
@@ -22,9 +22,6 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-# Model to use — 2.0-flash is the current stable default
-GEMINI_MODEL = "gemini-2.0-flash"
 
 # Lazy-initialised client — only created when a real API key exists
 _client: Optional[genai.Client] = None
@@ -114,7 +111,7 @@ async def evaluate_purchase_semantics(
 
     try:
         response = await client.aio.models.generate_content(
-            model=GEMINI_MODEL,
+            model=settings.gemini_model,
             contents=prompt,
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",

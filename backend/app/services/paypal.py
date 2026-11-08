@@ -118,12 +118,13 @@ def extract_vault_id(capture_response: dict) -> str | None:
     """
     Pull vault_id from a capture response.
     Path: payment_source.paypal.attributes.vault.id
-    Returns None if vaulting wasn't successful (caller decides how to handle).
+    Returns None if vaulting wasn't successful or status is not VAULTED.
     """
     try:
-        return (
-            capture_response["payment_source"]["paypal"]["attributes"]["vault"]["id"]
-        )
+        vault = capture_response["payment_source"]["paypal"]["attributes"]["vault"]
+        if vault.get("status") == "VAULTED":
+            return vault.get("id")
+        return None
     except (KeyError, TypeError):
         return None
 

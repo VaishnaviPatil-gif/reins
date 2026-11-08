@@ -10,10 +10,13 @@ Endpoints:
   DELETE /mandates/{id}/revoke         — revoke mandate + delete vault token
   GET    /mandates/agents              — list available agents (for the UI form)
 """
+import json
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Mandate, Agent, User
 from app.schemas import (
@@ -29,6 +32,9 @@ from app.services.paypal import (
     delete_vault_token,
     refund_capture,
 )
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter(prefix="/mandates", tags=["mandates"])
 
@@ -130,7 +136,7 @@ async def link_paypal_start(mandate_id: int, request: Request, db: Session = Dep
         raise HTTPException(status_code=400, detail="PayPal already linked to this mandate")
 
     # Build return/cancel URLs pointing back to our API so we can auto-complete
-    base = str(request.base_url).rstrip("/")
+    base = settings.public_base_url.rstrip("/") if settings.public_base_url else str(request.base_url).rstrip("/")
     return_url = f"{base}/mandates/{mandate_id}/link-confirm"
     cancel_url = f"{base}/mandates/{mandate_id}/link-cancel"
 
@@ -168,8 +174,10 @@ async def link_paypal_confirm(
 ):
     """
     Step 2 of 2 — PayPal redirects here after buyer approves.
-    We capture the order, extract the vault_id, store it, mark mandate active.
-    Then immediately refund the $1 so the user isn't actually charged.
+    We validate the order token, capture the order, verify status == 'VAULTED',
+    store vault_id, and mark mandate active.
+    Then immediately refund the $1 setup charge so the user isn't actually charged.
+    Idempotent: if the mandate is already active, returns its current state.
     """
     mandate = db.query(Mandate).filter(
         Mandate.id == mandate_id, Mandate.user_id == DEMO_USER_ID
@@ -177,38 +185,66 @@ async def link_paypal_confirm(
     if not mandate:
         raise HTTPException(status_code=404, detail="Mandate not found")
 
-    order_id = token or mandate.paypal_link_order_id
-    if not order_id:
-        raise HTTPException(status_code=400, detail="No pending PayPal order found")
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing required token query parameter")
 
-    access_token = await get_access_token()
-    capture_resp = await capture_order(access_token, order_id)
-
-    vault_id = extract_vault_id(capture_resp)
-    if not vault_id:
+    if not mandate.paypal_link_order_id or token != mandate.paypal_link_order_id:
         raise HTTPException(
-            status_code=502,
-            detail=(
-                "PayPal did not return a vault_id. "
-                "Ensure 'Reference Transactions' is enabled on your sandbox app — "
-                "see ARCHITECTURE.md for exact steps."
-            ),
+            status_code=400,
+            detail=f"Token mismatch: token '{token}' does not match mandate link order ID '{mandate.paypal_link_order_id}'",
         )
 
-    capture_id = extract_capture_id(capture_resp)
+    # Idempotent: if mandate is already active, return its current state
+    if mandate.status == "active" and mandate.vault_id:
+        return {
+            "message": "Mandate is already active.",
+            "mandate_id": mandate_id,
+            "vault_id": mandate.vault_id,
+            "setup_charge": "$1.00 — refunded",
+        }
 
-    # Refund the $1 setup charge immediately
+    order_id = token
+    access_token = await get_access_token()
+    capture_resp = await capture_order(access_token, order_id)
+    logger.info("PayPal capture response for order %s: %s", order_id, json.dumps(capture_resp, indent=2))
+
+    capture_id = extract_capture_id(capture_resp)
+    paypal_source = capture_resp.get("payment_source", {}).get("paypal", {})
+    vault_block = paypal_source.get("attributes", {}).get("vault", {})
+    vault_status = vault_block.get("status")
+    vault_id = vault_block.get("id")
+
+    if vault_status != "VAULTED" or not vault_id:
+        mandate.status = "pending_link"
+        db.commit()
+        refund_err = None
+        if capture_id:
+            try:
+                await refund_capture(access_token, capture_id, 1.00)
+            except Exception as e:
+                logger.error("Failed to refund capture %s: %s", capture_id, e)
+                refund_err = str(e)
+        err_detail = {
+            "error": "PayPal vaulting was not completed with status VAULTED.",
+            "vault_status": vault_status,
+            "vault_block": vault_block,
+            "mandate_id": mandate_id,
+        }
+        if refund_err:
+            err_detail["refund_error"] = refund_err
+        raise HTTPException(status_code=400, detail=err_detail)
+
+    # Refund the $1 setup charge immediately upon successful vaulting
     if capture_id:
         try:
             await refund_capture(access_token, capture_id, 1.00)
-        except Exception:
-            pass  # Refund failure is non-fatal; vault is what matters
+        except Exception as e:
+            logger.warning("Failed to refund setup charge %s: %s", capture_id, e)
 
     mandate.vault_id = vault_id
     mandate.status = "active"
     db.commit()
 
-    # Return a friendly redirect or JSON (UI will redirect to /mandates)
     return {
         "message": "PayPal linked successfully. The mandate is now active.",
         "mandate_id": mandate_id,
