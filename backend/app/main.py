@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import get_settings
 from app.database import engine, SessionLocal, Base
 from app.models import *  # noqa: F401, F403 — ensure all models are registered before create_all
 from app.seed import seed
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI):
     yield  # App runs here
 
 
+settings = get_settings()
+
 app = FastAPI(
     title="Reins API",
     description="OAuth for your wallet — a trust and control layer for AI agents spending via PayPal.",
@@ -34,9 +37,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+cors_origins = [
+    settings.frontend_base_url.rstrip("/"),
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten in production; demo needs flexibility
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

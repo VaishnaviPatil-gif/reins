@@ -3,6 +3,7 @@ App configuration loaded from environment variables.
 Using pydantic-settings so every missing var surfaces at startup, not at call time.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -19,6 +20,14 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     frontend_base_url: str = "http://localhost:5173"
     paypal_vault_fallback: bool = False
+
+    @field_validator("public_base_url", "frontend_base_url", mode="after")
+    @classmethod
+    def ensure_url_scheme(cls, v: str) -> str:
+        url = v.strip().rstrip("/")
+        if url and not url.startswith("http://") and not url.startswith("https://"):
+            return f"https://{url}"
+        return url
 
 
 @lru_cache

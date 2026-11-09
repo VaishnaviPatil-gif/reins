@@ -1,10 +1,12 @@
 services:
-  # Backend FastAPI service
+  # Backend FastAPI web service
   - type: web
     name: reins-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
     envVars:
       - key: PAYPAL_CLIENT_ID
         sync: false
@@ -17,23 +19,27 @@ services:
       - key: GEMINI_MODEL
         value: gemini-3.6-flash
       - key: PUBLIC_BASE_URL
-        sync: false
+        sync: false  # Set to https://reins-api.onrender.com in Render Dashboard
       - key: FRONTEND_BASE_URL
-        sync: false
+        sync: false  # Set to https://reins-frontend.onrender.com in Render Dashboard
       - key: PAYPAL_VAULT_FALLBACK
         value: "false"
       - key: REINS_SIGNING_SECRET
         sync: false
       - key: DATABASE_URL
         value: sqlite:///./reins.db
-    healthCheckPath: /health
 
-  # Frontend static site
+  # Frontend React static site
   - type: web
     name: reins-frontend
     runtime: static
-    buildCommand: cd frontend && npm install && npm run build
+    plan: free
+    buildCommand: npm --prefix frontend install && npm --prefix frontend run build
     staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_API_URL
-        sync: false
+        sync: false  # Set to https://reins-api.onrender.com in Render Dashboard
