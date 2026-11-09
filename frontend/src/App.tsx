@@ -2,7 +2,6 @@ import { Routes, Route, NavLink } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Mandates from './pages/Mandates'
 import Activity from './pages/Activity'
-import Disputes from './pages/Disputes'
 import AgentPlayground from './pages/AgentPlayground'
 
 export default function App() {
@@ -26,7 +25,6 @@ export default function App() {
             <NavLink to="/" end className={navClass}>Dashboard</NavLink>
             <NavLink to="/mandates" className={navClass}>Mandates</NavLink>
             <NavLink to="/activity" className={navClass}>Activity</NavLink>
-            <NavLink to="/disputes" className={navClass}>Disputes</NavLink>
             <NavLink to="/agent" className={navClass}>Agent Playground</NavLink>
           </nav>
         </div>
@@ -38,7 +36,6 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/mandates" element={<Mandates />} />
           <Route path="/activity" element={<Activity />} />
-          <Route path="/disputes" element={<Disputes />} />
           <Route path="/agent" element={<AgentPlayground />} />
         </Routes>
       </main>

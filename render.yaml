@@ -19,9 +19,9 @@ services:
       - key: GEMINI_MODEL
         value: gemini-3.6-flash
       - key: PUBLIC_BASE_URL
-        sync: false  # Set to https://reins-api.onrender.com in Render Dashboard
+        sync: false  # Set to backend URL in Render Dashboard
       - key: FRONTEND_BASE_URL
-        sync: false  # Set to https://reins-frontend.onrender.com in Render Dashboard
+        sync: false  # Set to frontend URL in Render Dashboard
       - key: PAYPAL_VAULT_FALLBACK
         value: "false"
       - key: DEMO_MODE
@@ -44,4 +44,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        sync: false  # Set to https://reins-api.onrender.com in Render Dashboard
+        sync: false  # Set to backend URL in Render Dashboard

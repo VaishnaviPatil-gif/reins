@@ -32,7 +32,6 @@ AI Agent  ──POST /purchases/attempt──▶  Policy Engine
 | Receipts | `services/receipts.py` | Chained SHA-256 audit log |
 | PayPal Client | `services/paypal.py` | httpx wrapper for sandbox APIs (vault-aware) |
 | Gemini Client | `services/gemini.py` | Category fit + injection detection |
-| Dispute Mediator | `routers/disputes.py` | AI review → optional refund |
 | Merchant Badge | `routers/verify.py` | Public trust verification |
 | Demo Agent | `routers/agent.py` | Thin Gemini agent with tools |
 
@@ -76,10 +75,10 @@ POST /v2/checkout/orders/{order_id}/capture
   Header: Prefer: return=representation    ← critical — gets vault.id in response body
 
 → payment_source.paypal.attributes.vault.id  ← store this as mandate.vault_id
-→ purchase_units[0].payments.captures[0].id  ← capture_id for the $1 refund
+→ purchase_units[0].payments.captures[0].id  ← capture_id for the \$1 refund
 ```
 
-The $1 setup charge is immediately refunded:
+The \$1 setup charge is immediately refunded:
 ```
 POST /v2/payments/captures/{capture_id}/refund
   amount: { currency_code: USD, value: "1.00" }
