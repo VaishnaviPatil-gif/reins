@@ -126,6 +126,30 @@ async def test_per_purchase_cap_exceeded_blocked(base_mandate):
 
 
 @pytest.mark.asyncio
+async def test_purchase_above_both_cap_and_escalate_is_blocked_not_escalated(base_mandate):
+    """
+    Ensure hard per_purchase_cap is checked BEFORE escalate_above.
+    Demo parameters: budget_total=300, per_purchase_cap=100, escalate_above=50.
+    A purchase of $189 is above escalate_above ($50) AND above per_purchase_cap ($100).
+    It MUST be BLOCKED by the hard cap, never ESCALATED.
+    """
+    base_mandate.budget_total = 300.0
+    base_mandate.budget_spent = 0.0
+    base_mandate.per_purchase_cap = 100.0
+    base_mandate.escalate_above = 50.0
+
+    res = await evaluate_purchase_policy(
+        mandate=base_mandate,
+        item="Commercial Thermal Label Printer Pro",
+        merchant="BookStore",
+        amount=189.00,
+    )
+    assert res.decision == "blocked"
+    assert "exceeds per-purchase cap" in res.reasons[0].lower()
+    assert res.decision != "escalated"
+
+
+@pytest.mark.asyncio
 async def test_remaining_budget_exceeded_blocked(base_mandate):
     # Budget total 100, spent 90 -> remaining 10. Amount 15. Cap is 40.
     base_mandate.budget_spent = 90.0

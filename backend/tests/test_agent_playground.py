@@ -53,9 +53,9 @@ def active_mandate(test_client):
     """Creates a seeded active mandate for restocking supplies."""
     r = test_client.post("/mandates/", json={
         "agent_id": 1,
-        "budget_total": 250.0,
-        "per_purchase_cap": 50.0,
-        "escalate_above": 30.0,
+        "budget_total": 300.0,
+        "per_purchase_cap": 100.0,
+        "escalate_above": 50.0,
         "allowed_categories": ["shipping_supplies", "packaging", "office_supplies"],
         "allowed_merchants": [],
         "blocked_merchants": ["scamseller.com"],
@@ -203,15 +203,40 @@ def test_run_scenario_escalated_above_threshold(test_client, active_mandate):
     assert res["escalation_id"] in pending_ids
 
 
-# ── Receipt Hash Chain Tamper Simulation & Repair Tests ──────────────────────
+# ── Receipt Hash Chain Tamper Simulation & Restore Tests ──────────────────────
 
-def test_receipt_tamper_simulation_and_repair(test_client, active_mandate):
+def test_receipt_tamper_gated_when_demo_mode_false(test_client, active_mandate):
     """
-    Test receipt hash chain integrity:
+    Ensure simulate-tamper and restore endpoints return 404 when DEMO_MODE is false.
+    """
+    from app.config import get_settings
+    settings = get_settings()
+    settings.demo_mode = False
+
+    r1 = test_client.post("/purchases/receipts/simulate-tamper")
+    assert r1.status_code == 404
+    assert "disabled" in r1.json()["detail"].lower()
+
+    r2 = test_client.post("/purchases/receipts/repair-chain")
+    assert r2.status_code == 404
+    assert "disabled" in r2.json()["detail"].lower()
+
+    r3 = test_client.post("/purchases/receipts/restore")
+    assert r3.status_code == 404
+    assert "disabled" in r3.json()["detail"].lower()
+
+
+def test_receipt_tamper_simulation_and_restore(test_client, active_mandate):
+    """
+    Test receipt hash chain integrity in DEMO_MODE:
     1. Create a purchase receipt -> chain is valid.
-    2. Simulate tamper -> alters receipt in DB -> chain verification fails.
-    3. Repair chain -> recalculates hashes -> chain verification passes again.
+    2. Simulate tamper -> snapshots original and alters receipt in DB -> chain verification fails.
+    3. Restore chain -> restores exact original payload snapshot -> chain verification passes.
     """
+    from app.config import get_settings
+    settings = get_settings()
+    settings.demo_mode = True
+
     # 1. Clean purchase creates receipt
     mock_order = {"id": "ORD-1", "status": "COMPLETED", "purchase_units": [{"payments": {"captures": [{"id": "CAP-1"}]}}]}
     mock_gemini = SemanticEvaluationResult(
@@ -238,6 +263,7 @@ def test_receipt_tamper_simulation_and_repair(test_client, active_mandate):
     tamper_r = test_client.post("/purchases/receipts/simulate-tamper")
     assert tamper_r.status_code == 200
     tampered_id = tamper_r.json()["tampered_receipt_id"]
+    original_amt = tamper_r.json()["original_amount"]
 
     # Verify chain: must detect tampering at tampered_id
     verify_r2 = test_client.get("/purchases/receipts/verify-chain")
@@ -245,12 +271,15 @@ def test_receipt_tamper_simulation_and_repair(test_client, active_mandate):
     assert verify_r2.json()["valid"] is False
     assert verify_r2.json()["broken_at_receipt_id"] == tampered_id
 
-    # 3. Repair chain
-    repair_r = test_client.post("/purchases/receipts/repair-chain")
-    assert repair_r.status_code == 200
-    assert repair_r.json()["receipts_rehashed"] >= 1
+    # 3. Restore chain from snapshot (does NOT recompute hashes)
+    restore_r = test_client.post("/purchases/receipts/restore")
+    assert restore_r.status_code == 200
+    assert restore_r.json()["receipts_restored"] >= 1
 
     # Verify chain: should now be completely valid again
     verify_r3 = test_client.get("/purchases/receipts/verify-chain")
     assert verify_r3.status_code == 200
     assert verify_r3.json()["valid"] is True
+
+    # Reset demo_mode
+    settings.demo_mode = False

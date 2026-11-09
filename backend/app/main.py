@@ -2,6 +2,8 @@
 Reins — FastAPI application entry point.
 Keeps main.py thin: wiring only. Business logic lives in routers and services.
 """
+import os
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,12 +21,22 @@ from app.routers import agent as agent_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create tables and seed demo data on startup."""
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        seed(db)
-    finally:
-        db.close()
+    # Ensure REINS_SIGNING_SECRET is configured outside tests
+    is_testing = (
+        "pytest" in sys.modules
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or any("pytest" in arg for arg in sys.argv)
+    )
+    if not settings.reins_signing_secret and not is_testing:
+        raise RuntimeError("REINS_SIGNING_SECRET is missing. The app refuses to start outside tests without REINS_SIGNING_SECRET.")
+
+    if not is_testing:
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed(db)
+        finally:
+            db.close()
     yield  # App runs here
 
 
@@ -37,18 +49,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-cors_origins = [
-    settings.frontend_base_url.rstrip("/"),
-    "http://localhost:5173",
-    "http://localhost:8000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8000",
-]
+# CORS: allow strictly FRONTEND_BASE_URL (and local dev origins if frontend is running locally)
+cors_origins = [settings.frontend_base_url.rstrip("/")]
+if any(dev_host in settings.frontend_base_url for dev_host in ["localhost", "127.0.0.1"]):
+    cors_origins.extend(["http://localhost:5173", "http://127.0.0.1:5173"])
+cors_origins = list(dict.fromkeys(cors_origins))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

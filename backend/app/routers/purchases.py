@@ -38,7 +38,8 @@ from app.services.receipts import (
     append_receipt,
     verify_receipt_chain,
     calculate_receipt_hash,
-    repair_receipt_chain,
+    snapshot_receipt_before_tamper,
+    restore_tampered_receipts,
 )
 from app.services.paypal import (
     get_access_token,
@@ -393,8 +394,16 @@ def verify_chain(db: Session = Depends(get_db)):
 def simulate_tamper(receipt_id: int | None = None, db: Session = Depends(get_db)):
     """
     Simulates direct database tampering on a receipt without updating its SHA-256 hash.
-    This demonstrates cryptographic tamper detection via verify-chain.
+    Gated behind DEMO_MODE (returns 404 if disabled).
+    Snapshots the original receipt state before modifying so it can be restored.
     """
+    settings = get_settings()
+    if not settings.demo_mode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tamper simulation endpoint is disabled. Set DEMO_MODE=true to enable.",
+        )
+
     if receipt_id:
         receipt = db.query(Receipt).filter(Receipt.id == receipt_id).first()
     else:
@@ -402,6 +411,9 @@ def simulate_tamper(receipt_id: int | None = None, db: Session = Depends(get_db)
 
     if not receipt:
         raise HTTPException(status_code=400, detail="No receipts found to tamper with")
+
+    # Snapshot original receipt payload before tampering
+    snapshot_receipt_before_tamper(receipt)
 
     old_amount = receipt.amount
     # Modify amount directly in database without updating hash
@@ -417,12 +429,23 @@ def simulate_tamper(receipt_id: int | None = None, db: Session = Depends(get_db)
 
 
 @router.post("/receipts/repair-chain")
-def repair_chain(db: Session = Depends(get_db)):
+@router.post("/receipts/restore")
+def restore_chain(db: Session = Depends(get_db)):
     """
-    Recalculates cryptographic hashes to restore valid hash chain integrity.
+    Restores tampered receipt(s) to their exact original pre-tamper payload snapshot.
+    Gated behind DEMO_MODE (returns 404 if disabled).
+    Does NOT recompute hashes — restores the exact cryptographically signed state.
     """
-    count = repair_receipt_chain(db)
+    settings = get_settings()
+    if not settings.demo_mode:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt restore endpoint is disabled. Set DEMO_MODE=true to enable.",
+        )
+
+    count = restore_tampered_receipts(db)
     return {
-        "message": "Cryptographic hash chain successfully repaired",
+        "message": "Tampered receipt(s) restored to original cryptographic state from snapshot",
+        "receipts_restored": count,
         "receipts_rehashed": count,
     }

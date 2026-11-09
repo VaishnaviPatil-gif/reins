@@ -27,10 +27,12 @@ jobs:
         env:
           PAYPAL_CLIENT_ID: "ci-placeholder"
           PAYPAL_CLIENT_SECRET: "ci-placeholder"
+          PAYPAL_BASE_URL: "https://api-m.sandbox.paypal.com"
           GEMINI_API_KEY: "ci-placeholder"
           GEMINI_MODEL: "gemini-3.6-flash"
           PUBLIC_BASE_URL: "http://localhost:8000"
           FRONTEND_BASE_URL: "http://localhost:5173"
           PAYPAL_VAULT_FALLBACK: "false"
+          DEMO_MODE: "false"
           REINS_SIGNING_SECRET: "ci-placeholder-secret-32-chars-xx"
         run: pytest -v

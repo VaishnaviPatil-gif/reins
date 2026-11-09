@@ -84,3 +84,11 @@ def test_seed_idempotent(test_client):
         test_client.get("/health")
         test_client.get("/health")
     # If seed wasn't idempotent, the second lifespan call would error — reaching here = pass
+
+
+def test_reins_signing_secret_missing_refuses_to_start():
+    """Ensure the application strictly refuses to start outside tests without REINS_SIGNING_SECRET."""
+    from app.config import Settings
+    with patch.dict("os.environ", {}, clear=True), patch("sys.modules", {}), patch("sys.argv", ["uvicorn", "app.main:app"]):
+        with pytest.raises(ValueError, match="REINS_SIGNING_SECRET is missing"):
+            Settings.validate_signing_secret("")

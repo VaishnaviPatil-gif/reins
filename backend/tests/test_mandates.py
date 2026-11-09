@@ -90,14 +90,15 @@ def test_create_mandate(test_client):
 
 
 def test_list_mandates(test_client):
-    """Create two mandates, list must return both."""
+    """Create two mandates, list must return both plus any seeded mandate."""
+    initial_count = len(test_client.get("/mandates/").json())
     for _ in range(2):
         test_client.post("/mandates/", json={
             "agent_id": 1, "budget_total": 50.0, "per_purchase_cap": 10.0,
         })
     r = test_client.get("/mandates/")
     assert r.status_code == 200
-    assert len(r.json()) == 2
+    assert len(r.json()) == initial_count + 2
 
 
 def test_get_mandate_not_found(test_client):

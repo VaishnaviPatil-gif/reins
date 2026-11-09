@@ -199,35 +199,55 @@ def verify_receipt_chain(db: Session) -> dict[str, Any]:
     }
 
 
-def repair_receipt_chain(db: Session) -> int:
-    """
-    Recalculates prev_hash and hash for all receipts in sequence,
-    restoring valid cryptographic integrity.
-    """
-    receipts = db.query(Receipt).order_by(Receipt.id.asc()).all()
-    expected_prev = GENESIS_HASH
+# In-memory storage for original pre-tamper receipt snapshots
+_tampered_snapshots: dict[int, dict[str, Any]] = {}
 
-    for r in receipts:
-        r.prev_hash = expected_prev
-        now_iso = (
-            r.created_at.isoformat()
-            if r.created_at.tzinfo
-            else r.created_at.replace(tzinfo=timezone.utc).isoformat()
-        )
-        r.hash = calculate_receipt_hash(
-            prev_hash=r.prev_hash,
-            mandate_id=r.mandate_id,
-            mandate_version=r.mandate_version,
-            agent_id=r.agent_id,
-            item=r.item,
-            merchant=r.merchant,
-            amount=r.amount,
-            currency=r.currency,
-            decision=r.decision,
-            injection_flag=r.injection_flag,
-            created_at_iso=now_iso,
-        )
-        expected_prev = r.hash
+
+def snapshot_receipt_before_tamper(receipt: Receipt) -> None:
+    """Snapshots the exact original receipt payload before simulated tampering."""
+    _tampered_snapshots[receipt.id] = {
+        "id": receipt.id,
+        "amount": receipt.amount,
+        "item": receipt.item,
+        "merchant": receipt.merchant,
+        "decision": receipt.decision,
+        "hash": receipt.hash,
+        "prev_hash": receipt.prev_hash,
+        "injection_flag": receipt.injection_flag,
+        "category_claimed": receipt.category_claimed,
+        "category_verified": receipt.category_verified,
+        "reasons": list(receipt.reasons) if receipt.reasons else [],
+        "evidence": dict(receipt.evidence) if receipt.evidence else {},
+        "created_at": receipt.created_at,
+    }
+
+
+def restore_tampered_receipts(db: Session) -> int:
+    """
+    Restores tampered receipts to their exact original pre-tamper payload snapshots.
+    Does NOT recompute hashes — restores the exact cryptographically signed state.
+    """
+    if not _tampered_snapshots:
+        return 0
+
+    count = 0
+    for receipt_id, snap in list(_tampered_snapshots.items()):
+        receipt = db.query(Receipt).filter(Receipt.id == receipt_id).first()
+        if receipt:
+            receipt.amount = snap["amount"]
+            receipt.item = snap["item"]
+            receipt.merchant = snap["merchant"]
+            receipt.decision = snap["decision"]
+            receipt.hash = snap["hash"]
+            receipt.prev_hash = snap["prev_hash"]
+            receipt.injection_flag = snap["injection_flag"]
+            receipt.category_claimed = snap["category_claimed"]
+            receipt.category_verified = snap["category_verified"]
+            receipt.reasons = snap["reasons"]
+            receipt.evidence = snap["evidence"]
+            receipt.created_at = snap["created_at"]
+            count += 1
 
     db.commit()
-    return len(receipts)
+    _tampered_snapshots.clear()
+    return count

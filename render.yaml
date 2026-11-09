@@ -24,6 +24,8 @@ services:
         sync: false  # Set to https://reins-frontend.onrender.com in Render Dashboard
       - key: PAYPAL_VAULT_FALLBACK
         value: "false"
+      - key: DEMO_MODE
+        value: "true"
       - key: REINS_SIGNING_SECRET
         sync: false
       - key: DATABASE_URL

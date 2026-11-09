@@ -2,6 +2,8 @@
 App configuration loaded from environment variables.
 Using pydantic-settings so every missing var surfaces at startup, not at call time.
 """
+import os
+import sys
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from functools import lru_cache
@@ -15,11 +17,28 @@ class Settings(BaseSettings):
     paypal_base_url: str = "https://api-m.sandbox.paypal.com"
     gemini_api_key: str = "GEMINI_KEY"
     gemini_model: str = "gemini-3.6-flash"
-    reins_signing_secret: str = "change-me-32-chars-minimum-secret"
+    reins_signing_secret: str = ""
     database_url: str = "sqlite:///./reins.db"
     public_base_url: str = "http://localhost:8000"
     frontend_base_url: str = "http://localhost:5173"
     paypal_vault_fallback: bool = False
+    demo_mode: bool = False
+
+    @field_validator("reins_signing_secret", mode="after")
+    @classmethod
+    def validate_signing_secret(cls, v: str) -> str:
+        is_testing = (
+            "pytest" in sys.modules
+            or "PYTEST_CURRENT_TEST" in os.environ
+            or any("pytest" in arg for arg in sys.argv)
+        )
+        if not v or not v.strip():
+            if is_testing:
+                return "test-signing-secret-placeholder-for-tests-32b"
+            raise ValueError(
+                "REINS_SIGNING_SECRET is missing. The application refuses to start outside tests without REINS_SIGNING_SECRET set."
+            )
+        return v.strip()
 
     @field_validator("public_base_url", "frontend_base_url", mode="after")
     @classmethod
