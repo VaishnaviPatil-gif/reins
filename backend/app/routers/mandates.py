@@ -14,6 +14,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -169,6 +170,7 @@ async def link_paypal_start(mandate_id: int, request: Request, db: Session = Dep
 @router.get("/{mandate_id}/link-confirm")
 async def link_paypal_confirm(
     mandate_id: int,
+    request: Request,
     token: str = "",       # PayPal appends ?token=ORDER_ID to the return_url
     db: Session = Depends(get_db),
 ):
@@ -178,24 +180,40 @@ async def link_paypal_confirm(
     store vault_id, and mark mandate active.
     Then immediately refund the $1 setup charge so the user isn't actually charged.
     Idempotent: if the mandate is already active, returns its current state.
+    Browser requests are redirected to {FRONTEND_BASE_URL}/mandates/{id}?linked=1 (or ?link_error=<code>).
     """
+    frontend_base = settings.frontend_base_url.rstrip("/")
+    is_browser_request = (
+        "text/html" in request.headers.get("accept", "")
+        or request.query_params.get("redirect") in ("1", "true")
+        or request.headers.get("sec-fetch-dest") == "document"
+    )
+
     mandate = db.query(Mandate).filter(
         Mandate.id == mandate_id, Mandate.user_id == DEMO_USER_ID
     ).first()
     if not mandate:
+        if is_browser_request:
+            return RedirectResponse(url=f"{frontend_base}/mandates?link_error=mandate_not_found", status_code=303)
         raise HTTPException(status_code=404, detail="Mandate not found")
 
     if not token:
+        if is_browser_request:
+            return RedirectResponse(url=f"{frontend_base}/mandates/{mandate_id}?link_error=missing_token", status_code=303)
         raise HTTPException(status_code=400, detail="Missing required token query parameter")
 
     if not mandate.paypal_link_order_id or token != mandate.paypal_link_order_id:
+        if is_browser_request:
+            return RedirectResponse(url=f"{frontend_base}/mandates/{mandate_id}?link_error=token_mismatch", status_code=303)
         raise HTTPException(
             status_code=400,
             detail=f"Token mismatch: token '{token}' does not match mandate link order ID '{mandate.paypal_link_order_id}'",
         )
 
-    # Idempotent: if mandate is already active, return its current state
+    # Idempotent: if mandate is already active, return its current state or redirect
     if mandate.status == "active" and mandate.vault_id:
+        if is_browser_request:
+            return RedirectResponse(url=f"{frontend_base}/mandates/{mandate_id}?linked=1", status_code=303)
         return {
             "message": "Mandate is already active.",
             "mandate_id": mandate_id,
@@ -232,6 +250,8 @@ async def link_paypal_confirm(
         }
         if refund_err:
             err_detail["refund_error"] = refund_err
+        if is_browser_request:
+            return RedirectResponse(url=f"{frontend_base}/mandates/{mandate_id}?link_error=vault_failed", status_code=303)
         raise HTTPException(status_code=400, detail=err_detail)
 
     # Refund the $1 setup charge immediately upon successful vaulting
@@ -245,6 +265,9 @@ async def link_paypal_confirm(
     mandate.status = "active"
     db.commit()
 
+    if is_browser_request:
+        return RedirectResponse(url=f"{frontend_base}/mandates/{mandate_id}?linked=1", status_code=303)
+
     return {
         "message": "PayPal linked successfully. The mandate is now active.",
         "mandate_id": mandate_id,
@@ -254,8 +277,16 @@ async def link_paypal_confirm(
 
 
 @router.get("/{mandate_id}/link-cancel")
-def link_paypal_cancel(mandate_id: int):
+def link_paypal_cancel(mandate_id: int, request: Request):
     """User cancelled the PayPal approval. Mandate stays in pending_link state."""
+    frontend_base = settings.frontend_base_url.rstrip("/")
+    is_browser_request = (
+        "text/html" in request.headers.get("accept", "")
+        or request.query_params.get("redirect") in ("1", "true")
+        or request.headers.get("sec-fetch-dest") == "document"
+    )
+    if is_browser_request:
+        return RedirectResponse(url=f"{frontend_base}/mandates/{mandate_id}?link_error=cancelled", status_code=303)
     return {"message": "PayPal linking cancelled. The mandate is not yet active.", "mandate_id": mandate_id}
 
 

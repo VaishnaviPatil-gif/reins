@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from jose import JWTError
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import Mandate, Receipt, Escalation, Agent
 from app.schemas import (
@@ -44,8 +45,10 @@ from app.services.paypal import (
     create_vaulted_order,
     capture_order,
     extract_capture_id,
+    create_fallback_order,
 )
 
+settings = get_settings()
 router = APIRouter(prefix="/purchases", tags=["purchases"])
 
 
@@ -91,40 +94,66 @@ async def attempt_purchase(body: PurchaseAttemptRequest, db: Session = Depends(g
 
     # Step 4: Handle Decision
     if policy.decision == "approved":
-        # Ensure mandate has an active PayPal vault token
-        if not mandate.vault_id:
+        # Ensure mandate has an active PayPal vault token or fallback is enabled
+        if not mandate.vault_id and not settings.paypal_vault_fallback:
             policy.decision = "blocked"
             policy.reasons.append("Mandate has no active PayPal vault token for server-side processing")
 
-    # Path A: APPROVED -> Execute PayPal vault charge
+    # Path A: APPROVED -> Execute PayPal charge (Vault or Fallback)
     if policy.decision == "approved":
         order_id = None
         capture_id = None
+        approve_url = None
         try:
             token = await get_access_token()
-            order_resp = await create_vaulted_order(
-                access_token=token,
-                vault_id=mandate.vault_id,
-                amount=body.amount,
-                currency=body.currency,
-                description=f"Reins Agent Purchase: {body.item}",
-            )
-            order_id = order_resp.get("id")
+            if mandate.vault_id:
+                order_resp = await create_vaulted_order(
+                    access_token=token,
+                    vault_id=mandate.vault_id,
+                    amount=body.amount,
+                    currency=body.currency,
+                    description=f"Reins Agent Purchase: {body.item}",
+                )
+                order_id = order_resp.get("id")
 
-            # In some configurations, the order auto-captures; otherwise explicit capture
-            if order_resp.get("status") == "COMPLETED":
-                capture_id = extract_capture_id(order_resp)
+                # In some configurations, the order auto-captures; otherwise explicit capture
+                if order_resp.get("status") == "COMPLETED":
+                    capture_id = extract_capture_id(order_resp)
+                else:
+                    capture_resp = await capture_order(token, order_id)
+                    capture_id = extract_capture_id(capture_resp)
+
+                mandate.budget_spent = round(mandate.budget_spent + body.amount, 2)
             else:
-                capture_resp = await capture_order(token, order_id)
-                capture_id = extract_capture_id(capture_resp)
-
-            # Update mandate spent balance
-            mandate.budget_spent = round(mandate.budget_spent + body.amount, 2)
+                # Fallback Mode: Create PayPal order returning buyer approval link
+                base = settings.public_base_url.rstrip("/")
+                return_url = f"{base}/mandates/{mandate.id}/link-confirm"
+                cancel_url = f"{base}/mandates/{mandate.id}/link-cancel"
+                order_resp = await create_fallback_order(
+                    access_token=token,
+                    amount=body.amount,
+                    currency=body.currency,
+                    description=f"Reins Purchase (Fallback): {body.item}",
+                    return_url=return_url,
+                    cancel_url=cancel_url,
+                )
+                order_id = order_resp.get("id")
+                approve_url = next(
+                    (link["href"] for link in order_resp.get("links", []) if link["rel"] == "payer-action"),
+                    None,
+                )
+                policy.reasons.append("Vault fallback active: approve_url issued for manual PayPal payment")
+                mandate.budget_spent = round(mandate.budget_spent + body.amount, 2)
 
         except Exception as exc:
             # Payment failed at gateway -> record as blocked
             policy.decision = "blocked"
             policy.reasons.append(f"PayPal execution error: {str(exc)}")
+
+        evidence_dict = dict(body.evidence or {})
+        if approve_url:
+            evidence_dict["approve_url"] = approve_url
+            evidence_dict["fallback_mode"] = True
 
         receipt = append_receipt(
             db=db,
@@ -137,7 +166,7 @@ async def attempt_purchase(body: PurchaseAttemptRequest, db: Session = Depends(g
             category_claimed=body.category,
             category_verified=policy.category_verified,
             agent_plan=body.agent_plan,
-            evidence=body.evidence,
+            evidence=evidence_dict,
             decision=policy.decision,
             reasons=policy.reasons,
             injection_flag=policy.injection_flag,
@@ -147,10 +176,17 @@ async def attempt_purchase(body: PurchaseAttemptRequest, db: Session = Depends(g
         db.commit()
         db.refresh(receipt)
 
+        msg = (
+            "Purchase approved and processed via PayPal Vault"
+            if mandate.vault_id
+            else "Purchase approved by policy engine. Approve in PayPal to complete payment (Fallback Mode)."
+        ) if policy.decision == "approved" else "Payment processing failed"
+
         return PurchaseAttemptResponse(
             decision=policy.decision,
             receipt=ReceiptOut.model_validate(receipt),
-            message="Purchase approved and processed via PayPal Vault" if policy.decision == "approved" else "Payment processing failed",
+            message=msg,
+            approve_url=approve_url,
         )
 
     # Path B: BLOCKED -> Log blocked receipt & return details

@@ -121,6 +121,7 @@ class PurchaseAttemptResponse(BaseModel):
     receipt: ReceiptOut
     message: str
     escalation_id: Optional[int] = None
+    approve_url: Optional[str] = None
 
 
 class EscalationOut(BaseModel):

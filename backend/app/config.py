@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     reins_signing_secret: str = "change-me-32-chars-minimum-secret"
     database_url: str = "sqlite:///./reins.db"
     public_base_url: str = "http://localhost:8000"
+    frontend_base_url: str = "http://localhost:5173"
+    paypal_vault_fallback: bool = False
 
 
 @lru_cache

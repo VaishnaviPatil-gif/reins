@@ -30,5 +30,7 @@ jobs:
           GEMINI_API_KEY: "ci-placeholder"
           GEMINI_MODEL: "gemini-3.6-flash"
           PUBLIC_BASE_URL: "http://localhost:8000"
+          FRONTEND_BASE_URL: "http://localhost:5173"
+          PAYPAL_VAULT_FALLBACK: "false"
           REINS_SIGNING_SECRET: "ci-placeholder-secret-32-chars-xx"
         run: pytest -v

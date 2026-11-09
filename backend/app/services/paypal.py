@@ -219,3 +219,49 @@ async def delete_vault_token(access_token: str, vault_id: str) -> bool:
             return False  # Already gone — treat as success
         response.raise_for_status()
         return True
+
+
+
+async def create_fallback_order(
+    access_token: str,
+    amount: float,
+    currency: str,
+    description: str,
+    return_url: str,
+    cancel_url: str,
+) -> dict:
+    """
+    Creates a standard PayPal checkout order for fallback mode when vaulting is not available.
+    Returns the order dict including links with rel='payer-action' (the approve URL).
+    """
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{settings.paypal_base_url}/v2/checkout/orders",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+                "PayPal-Request-Id": str(uuid.uuid4()),
+            },
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [
+                    {
+                        "amount": {"currency_code": currency.upper(), "value": f"{amount:.2f}"},
+                        "description": description,
+                    }
+                ],
+                "payment_source": {
+                    "paypal": {
+                        "experience_context": {
+                            "return_url": return_url,
+                            "cancel_url": cancel_url,
+                            "user_action": "PAY_NOW",
+                            "brand_name": "Reins",
+                        }
+                    }
+                },
+            },
+            timeout=15.0,
+        )
+        response.raise_for_status()
+        return response.json()

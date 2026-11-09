@@ -60,6 +60,7 @@ class ScenarioResultOut(BaseModel):
     receipt_id: Optional[int] = None
     escalation_id: Optional[int] = None
     paypal_capture_id: Optional[str] = None
+    approve_url: Optional[str] = None
     message: str
 
 
@@ -244,6 +245,7 @@ async def run_scenarios(body: RunScenariosRequest, db: Session = Depends(get_db)
                     receipt_id=receipt.id if receipt else None,
                     escalation_id=escalation_id,
                     paypal_capture_id=receipt.paypal_capture_id if receipt else None,
+                    approve_url=resp.approve_url,
                     message=resp.message,
                 )
             )

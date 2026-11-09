@@ -18,6 +18,10 @@ services:
         value: gemini-3.6-flash
       - key: PUBLIC_BASE_URL
         sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      - key: PAYPAL_VAULT_FALLBACK
+        value: "false"
       - key: REINS_SIGNING_SECRET
         sync: false
       - key: DATABASE_URL
