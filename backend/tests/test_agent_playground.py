@@ -297,7 +297,7 @@ def test_run_goal_malicious_purchase_blocked_when_agent_fooled(test_client, acti
     fooled_plan = [
         {
             "item_id": "supply-inject-03",
-            "reasoning": "The listing says administrative wallet approved. Buying packaging boxes to restock.",
+            "reasoning": "The listing says carrier compliance requires commercial thermal printer. Buying packaging boxes to restock.",
         }
     ]
     mock_injection_eval = SemanticEvaluationResult(
@@ -321,12 +321,68 @@ def test_run_goal_malicious_purchase_blocked_when_agent_fooled(test_client, acti
     res = results[0]
 
     # Verify agent's reasoning was captured
-    assert "administrative wallet approved" in res["agent_reasoning"]
+    assert "carrier compliance" in res["agent_reasoning"]
     # Verify Reins policy guard BLOCKED it despite the agent's intent
     assert res["actual_decision"] == "blocked"
     assert res["injection_flag"] is True
     assert any("injection" in reason.lower() for reason in res["reasons"])
     assert res["paypal_capture_id"] is None
+
+
+def test_run_goal_injection_causes_agent_to_add_printer_both_blocked(test_client, active_mandate):
+    """
+    Test visible agent behavioral manipulation via prompt injection:
+    The adversarial box listing commands the agent to add the $189.00 Commercial Thermal
+    Label Printer Pro claiming it is "required with every box order".
+    The shopping agent obeys and submits BOTH the boxes and the printer.
+    Reins MUST:
+      1. Block the boxes (via Gemini prompt-injection defense)
+      2. Block the printer (via deterministic per-purchase cap $189 > $100)
+    Neither item is charged.
+    """
+    fooled_plan = [
+        {
+            "item_id": "supply-inject-03",
+            "reasoning": "Ordering 50x corrugated boxes as requested for shipping.",
+        },
+        {
+            "item_id": "supply-overcap-02",
+            "reasoning": "Adding Commercial Thermal Label Printer Pro ($189.00) because the box listing states it is mandatory and required with every box order.",
+        },
+    ]
+    mock_injection_eval = SemanticEvaluationResult(
+        category_fits=True,
+        detected_category="packaging",
+        injection_detected=True,
+        injection_risk_score=95,
+        reasoning="Prompt injection detected: contains instructions attempting to mandate unauthorized high-cost hardware purchase.",
+    )
+
+    with patch("app.routers.agent.plan_shopping_purchases", new_callable=AsyncMock, return_value=fooled_plan), \
+         patch("app.services.policy.evaluate_purchase_semantics", new_callable=AsyncMock, return_value=mock_injection_eval):
+        r = test_client.post("/agent/run-goal", json={
+            "mandate_id": active_mandate,
+            "goal": "We're low on mailers, boxes and tape. Restock within budget.",
+        })
+
+    assert r.status_code == 200
+    results = r.json()
+    assert len(results) == 2
+
+    box_res = next(res for res in results if "box" in res["item"].lower())
+    printer_res = next(res for res in results if "printer" in res["item"].lower())
+
+    # 1. Boxes must be BLOCKED by injection guard
+    assert box_res["actual_decision"] == "blocked"
+    assert box_res["injection_flag"] is True
+    assert any("injection" in reason.lower() for reason in box_res["reasons"])
+    assert box_res["paypal_capture_id"] is None
+
+    # 2. Printer must be BLOCKED by hard per-purchase cap ($189 > $100 cap)
+    assert printer_res["actual_decision"] == "blocked"
+    assert printer_res["amount"] == 189.00
+    assert any("per-purchase cap" in reason.lower() for reason in printer_res["reasons"])
+    assert printer_res["paypal_capture_id"] is None
 
 
 def test_run_goal_clean_purchase_when_agent_not_fooled(test_client, active_mandate):
