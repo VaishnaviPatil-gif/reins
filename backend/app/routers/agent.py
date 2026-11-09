@@ -27,7 +27,8 @@ from app.routers.purchases import attempt_purchase
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
-CATALOG_PATH = Path(__file__).resolve().parent.parent.parent / "demo-store" / "catalog.json"
+CATALOG_PATH_ROOT = Path(__file__).resolve().parents[3] / "demo-store" / "catalog.json"
+CATALOG_PATH_ALT = Path(__file__).resolve().parents[2] / "demo-store" / "catalog.json"
 
 
 class CatalogItemOut(BaseModel):
@@ -68,9 +69,10 @@ class RunScenariosRequest(BaseModel):
 
 
 def _load_catalog() -> list[dict]:
-    if CATALOG_PATH.exists():
-        with open(CATALOG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+    for p in (CATALOG_PATH_ROOT, CATALOG_PATH_ALT):
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
     return [
         {
             "id": "supply-clean-01",

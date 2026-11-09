@@ -101,9 +101,17 @@ def test_get_catalog(test_client):
 def test_run_scenario_clean_purchase(test_client, active_mandate):
     """Scenario 1: Clean restock purchase should be approved and charged via vault."""
     mock_order = {"id": "ORD-CLEAN-1", "status": "COMPLETED", "purchase_units": [{"payments": {"captures": [{"id": "CAP-CLEAN-1"}]}}]}
+    mock_gemini = SemanticEvaluationResult(
+        category_fits=True,
+        detected_category="shipping_supplies",
+        injection_detected=False,
+        injection_risk_score=0,
+        reasoning="Packaging and shipping supplies category matches.",
+    )
 
     with patch("app.routers.purchases.get_access_token", new_callable=AsyncMock, return_value="tok"), \
-         patch("app.routers.purchases.create_vaulted_order", new_callable=AsyncMock, return_value=mock_order):
+         patch("app.routers.purchases.create_vaulted_order", new_callable=AsyncMock, return_value=mock_order), \
+         patch("app.services.policy.evaluate_purchase_semantics", new_callable=AsyncMock, return_value=mock_gemini):
         r = test_client.post("/agent/run-scenarios", json={
             "mandate_id": active_mandate,
             "scenario_id": "clean",
@@ -206,8 +214,16 @@ def test_receipt_tamper_simulation_and_repair(test_client, active_mandate):
     """
     # 1. Clean purchase creates receipt
     mock_order = {"id": "ORD-1", "status": "COMPLETED", "purchase_units": [{"payments": {"captures": [{"id": "CAP-1"}]}}]}
+    mock_gemini = SemanticEvaluationResult(
+        category_fits=True,
+        detected_category="shipping_supplies",
+        injection_detected=False,
+        injection_risk_score=0,
+        reasoning="Packaging and shipping supplies category matches.",
+    )
     with patch("app.routers.purchases.get_access_token", new_callable=AsyncMock, return_value="tok"), \
-         patch("app.routers.purchases.create_vaulted_order", new_callable=AsyncMock, return_value=mock_order):
+         patch("app.routers.purchases.create_vaulted_order", new_callable=AsyncMock, return_value=mock_order), \
+         patch("app.services.policy.evaluate_purchase_semantics", new_callable=AsyncMock, return_value=mock_gemini):
         test_client.post("/agent/run-scenarios", json={
             "mandate_id": active_mandate,
             "scenario_id": "clean",
