@@ -134,6 +134,7 @@ export interface ScenarioResult {
   escalation_id: number | null
   paypal_capture_id: string | null
   approve_url?: string | null
+  agent_reasoning?: string | null
   message: string
 }
 
@@ -179,6 +180,12 @@ export const runAgentScenarios = (mandateId: number, scenarioId?: string) =>
   api.post<ScenarioResult[]>('/agent/run-scenarios', {
     mandate_id: mandateId,
     scenario_id: scenarioId,
+  }).then((r) => r.data)
+
+export const runAgentGoal = (mandateId: number, goal: string) =>
+  api.post<ScenarioResult[]>('/agent/run-goal', {
+    mandate_id: mandateId,
+    goal,
   }).then((r) => r.data)
 
 export const simulateTamper = (receiptId?: number) =>

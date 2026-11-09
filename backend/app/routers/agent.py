@@ -24,6 +24,7 @@ from app.database import get_db
 from app.models import Mandate, Agent
 from app.schemas import PurchaseAttemptRequest
 from app.routers.purchases import attempt_purchase
+from app.services.gemini import plan_shopping_purchases
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -61,12 +62,21 @@ class ScenarioResultOut(BaseModel):
     escalation_id: Optional[int] = None
     paypal_capture_id: Optional[str] = None
     approve_url: Optional[str] = None
+    agent_reasoning: Optional[str] = None
     message: str
 
 
 class RunScenariosRequest(BaseModel):
     mandate_id: int
     scenario_id: Optional[str] = None  # None or "all" to run all 4
+
+
+class RunGoalRequest(BaseModel):
+    mandate_id: int
+    goal: str = Field(
+        default="We're low on mailers, boxes and tape. Restock within budget.",
+        description="Operational goal for the autonomous Gemini shopping agent",
+    )
 
 
 def _load_catalog() -> list[dict]:
@@ -244,6 +254,7 @@ async def run_scenarios(body: RunScenariosRequest, db: Session = Depends(get_db)
                     escalation_id=escalation_id,
                     paypal_capture_id=receipt.paypal_capture_id if receipt else None,
                     approve_url=resp.approve_url,
+                    agent_reasoning=cfg["plan"],
                     message=resp.message,
                 )
             )
@@ -261,6 +272,119 @@ async def run_scenarios(body: RunScenariosRequest, db: Session = Depends(get_db)
                     actual_decision="error",
                     passed_expected=False,
                     reasons=[str(exc)],
+                    agent_reasoning=cfg["plan"],
+                    message=f"Execution error: {exc}",
+                )
+            )
+
+    return results
+
+
+@router.post("/run-goal", response_model=list[ScenarioResultOut])
+async def run_agent_goal(body: RunGoalRequest, db: Session = Depends(get_db)):
+    """
+    Autonomous AI Agent with Gemini:
+    Gemini (settings.gemini_model) acts as the shopping agent.
+    It reads the full catalog including raw listing descriptions, decides what to buy
+    and why, and submits each purchase through Reins' normal purchase-attempt flow.
+    It never calls PayPal directly.
+
+    Untrusted Model Invariant:
+    - Item IDs and prices come STRICTLY from the verified catalog, never from model text.
+    - Each purchase intent is cryptographically signed, evaluated by Reins policy,
+      screened by Reins Gemini security guard, and server-side vaulted or blocked.
+    """
+    mandate = db.query(Mandate).filter(Mandate.id == body.mandate_id).first()
+    if not mandate:
+        raise HTTPException(status_code=404, detail="Mandate not found")
+    if mandate.status != "active":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Mandate #{mandate.id} is {mandate.status}. Must be active to execute agent goals.",
+        )
+
+    catalog = _load_catalog()
+    catalog_map = {item["id"]: item for item in catalog}
+
+    # Gemini plans purchases based on the goal
+    planned_items = await plan_shopping_purchases(goal=body.goal, catalog=catalog)
+
+    results = []
+
+    for idx, plan in enumerate(planned_items, 1):
+        item_id = plan.get("item_id")
+        cat_item = catalog_map.get(item_id)
+        if not cat_item:
+            continue
+
+        # Treat agent's output as UNTRUSTED: price & metadata come strictly from catalog
+        amount = cat_item["price"]
+        agent_reasoning = plan.get("reasoning") or f"Autonomous agent selected {cat_item['name']} for goal."
+
+        # Refresh mandate before each attempt to get updated spent balance
+        db.refresh(mandate)
+
+        attempt_req = PurchaseAttemptRequest(
+            mandate_token=mandate.token,
+            item=cat_item["name"],
+            merchant=cat_item["merchant"],
+            amount=amount,
+            currency=cat_item.get("currency", "USD"),
+            category=cat_item["category"],
+            agent_plan=agent_reasoning,
+            evidence={
+                "catalog_id": cat_item["id"],
+                "description": cat_item["description"],
+                "seller_rating": 4.8,
+                "goal": body.goal,
+            },
+        )
+
+        try:
+            resp = await attempt_purchase(attempt_req, db)
+            actual_decision = resp.decision
+            receipt = resp.receipt
+            escalation_id = resp.escalation_id
+
+            expected_decision = cat_item.get("expected_decision", "approved")
+
+            results.append(
+                ScenarioResultOut(
+                    scenario=cat_item.get("scenario", f"goal-{idx}"),
+                    name=f"AI Agent: {cat_item['name']}",
+                    item=cat_item["name"],
+                    merchant=cat_item["merchant"],
+                    amount=amount,
+                    currency=cat_item.get("currency", "USD"),
+                    category=cat_item["category"],
+                    expected_decision=expected_decision,
+                    actual_decision=actual_decision,
+                    passed_expected=(actual_decision == expected_decision),
+                    reasons=receipt.reasons if receipt else [],
+                    injection_flag=receipt.injection_flag if receipt else False,
+                    receipt_id=receipt.id if receipt else None,
+                    escalation_id=escalation_id,
+                    paypal_capture_id=receipt.paypal_capture_id if receipt else None,
+                    approve_url=resp.approve_url,
+                    agent_reasoning=agent_reasoning,
+                    message=resp.message,
+                )
+            )
+        except Exception as exc:
+            results.append(
+                ScenarioResultOut(
+                    scenario=cat_item.get("scenario", f"goal-{idx}"),
+                    name=f"AI Agent: {cat_item['name']}",
+                    item=cat_item["name"],
+                    merchant=cat_item["merchant"],
+                    amount=amount,
+                    currency=cat_item.get("currency", "USD"),
+                    category=cat_item["category"],
+                    expected_decision=cat_item.get("expected_decision", "approved"),
+                    actual_decision="error",
+                    passed_expected=False,
+                    reasons=[str(exc)],
+                    agent_reasoning=agent_reasoning,
                     message=f"Execution error: {exc}",
                 )
             )

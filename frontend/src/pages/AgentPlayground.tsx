@@ -9,6 +9,7 @@ import {
   fetchMandates,
   fetchCatalog,
   runAgentScenarios,
+  runAgentGoal,
   fetchEscalations,
   approveEscalation,
   denyEscalation,
@@ -26,6 +27,8 @@ export default function AgentPlayground() {
   const [results, setResults] = useState<ScenarioResult[]>([])
   const [escalations, setEscalations] = useState<Escalation[]>([])
   const [isRunning, setIsRunning] = useState(false)
+  const [isAiRunning, setIsAiRunning] = useState(false)
+  const [goal, setGoal] = useState("We're low on mailers, boxes and tape. Restock within budget.")
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
@@ -56,16 +59,16 @@ export default function AgentPlayground() {
 
   const selectedMandate = mandates.find((m) => m.id === selectedMandateId)
 
-  // 1-Click quick setup for the seller persona mandate
+  // 1-Click quick setup for the seller persona mandate ($300 budget, $100 cap, $50 escalate)
   const handleQuickCreateMandate = async () => {
     setError(null)
     setSuccessMsg(null)
     try {
       const newM = await createMandate({
         agent_id: 1,
-        budget_total: 250.0,
-        per_purchase_cap: 50.0,
-        escalate_above: 30.0,
+        budget_total: 300.0,
+        per_purchase_cap: 100.0,
+        escalate_above: 50.0,
         allowed_categories: ['shipping_supplies', 'packaging', 'office_supplies'],
         allowed_merchants: [],
         blocked_merchants: ['scamseller.com'],
@@ -73,10 +76,31 @@ export default function AgentPlayground() {
       await loadData()
       setSelectedMandateId(newM.id)
       setSuccessMsg(
-        `Created new Restock Mandate #${newM.id} ($250 Budget, $50 Cap, $30 Escalate Threshold). Complete Link PayPal or use sandbox to activate!`
+        `Created new Restock Mandate #${newM.id} ($300 Budget, $100 Cap, $50 Escalate Threshold). Complete Link PayPal or use sandbox to activate!`
       )
     } catch (err: any) {
       setError(err.response?.data?.detail ?? err.message)
+    }
+  }
+
+  const handleRunAiAgent = async () => {
+    if (!selectedMandateId) {
+      setError('Please select a mandate first.')
+      return
+    }
+
+    setError(null)
+    setSuccessMsg(null)
+    setIsAiRunning(true)
+
+    try {
+      const runResults = await runAgentGoal(selectedMandateId, goal)
+      setResults(runResults)
+      await loadData()
+    } catch (err: any) {
+      setError(err.response?.data?.detail ?? err.message)
+    } finally {
+      setIsAiRunning(false)
     }
   }
 
@@ -253,20 +277,56 @@ export default function AgentPlayground() {
         </div>
       )}
 
+      {/* Autonomous AI Agent Goal Box */}
+      <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/80 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">🤖</span>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Autonomous AI Purchasing Agent (Gemini 3.6 Flash)</h2>
+              <p className="text-xs text-gray-600">
+                Gemini reads the supplier catalog and descriptions, plans restocking purchases, and submits them through Reins guardrails.
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-semibold self-start sm:self-auto border border-indigo-200">
+            <span>✨</span> Gemini-Driven
+          </span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder="Operational goal for the shopping agent..."
+            className="flex-1 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-inner"
+          />
+          <button
+            onClick={handleRunAiAgent}
+            disabled={isAiRunning || isRunning || !selectedMandate}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <span>{isAiRunning ? '🧠' : '✨'}</span>
+            <span>{isAiRunning ? 'Agent Planning & Buying…' : 'Run AI agent'}</span>
+          </button>
+        </div>
+      </div>
+
       {/* Catalog Preview */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Supplier Restock Catalog</h2>
             <p className="text-xs text-gray-500">Items the agent evaluates during its restocking cycle.</p>
           </div>
           <button
             onClick={() => handleRunAgent()}
-            disabled={isRunning || !selectedMandate}
-            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center gap-2"
+            disabled={isRunning || isAiRunning || !selectedMandate}
+            className="px-4 py-2 bg-gray-900 hover:bg-black disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-2 self-start sm:self-auto"
           >
             <span>{isRunning ? '⏳' : '▶'}</span>
-            <span>{isRunning ? 'Running Scenarios…' : 'Run Agent (All 4 Scenarios)'}</span>
+            <span>{isRunning ? 'Running Scripted…' : 'Run scripted demo (4 scenarios)'}</span>
           </button>
         </div>
 
@@ -372,24 +432,53 @@ export default function AgentPlayground() {
                     </div>
                   </div>
 
-                  <div className="text-xs text-gray-700 bg-gray-50 rounded-lg p-3 space-y-1">
-                    <div>
-                      <span className="font-semibold text-gray-900">Item:</span> {r.item} ({r.category})
-                    </div>
-                    <div>
-                      <span className="font-semibold text-gray-900">Policy Rationale:</span>{' '}
-                      {r.reasons.length > 0 ? r.reasons.join(' • ') : r.message}
-                    </div>
-                    {r.paypal_capture_id && (
-                      <div className="text-emerald-700 font-mono">
-                        <span className="font-semibold">PayPal Capture ID:</span> {r.paypal_capture_id}
+                  {/* Agent reasoning vs Reins decision */}
+                  <div className="space-y-2 pt-1 text-xs">
+                    {r.agent_reasoning && (
+                      <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-lg p-3 text-indigo-950 flex items-start gap-2.5">
+                        <span className="text-base leading-none">🤖</span>
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-indigo-900">Agent wanted {r.item} because:</span>
+                          <p className="text-indigo-900/90 italic">"{r.agent_reasoning}"</p>
+                        </div>
                       </div>
                     )}
-                    {r.receipt_id && (
-                      <div className="text-gray-500 font-mono">
-                        <span className="font-semibold">Receipt Hash Chained:</span> #{r.receipt_id}
+
+                    <div className={`rounded-lg p-3 flex items-start gap-2.5 border ${
+                      r.actual_decision === 'approved'
+                        ? 'bg-emerald-50/90 text-emerald-950 border-emerald-200'
+                        : r.actual_decision === 'escalated'
+                        ? 'bg-amber-50/90 text-amber-950 border-amber-200'
+                        : 'bg-rose-50/90 text-rose-950 border-rose-200'
+                    }`}>
+                      <span className="text-base leading-none">
+                        {r.actual_decision === 'approved' ? '🛡️' : r.actual_decision === 'escalated' ? '⚖️' : '🚫'}
+                      </span>
+                      <div className="space-y-0.5">
+                        <span className="font-bold">
+                          Reins {r.actual_decision === 'approved' ? 'APPROVED' : r.actual_decision === 'escalated' ? 'ESCALATED' : 'BLOCKED'} because:
+                        </span>
+                        <p className="font-medium">
+                          {r.reasons.length > 0 ? r.reasons.join(' • ') : r.message}
+                        </p>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Metadata & Actions */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 pt-1 font-mono">
+                      <span>Category: <strong className="text-gray-700 font-sans">{r.category}</strong></span>
+                      {r.paypal_capture_id && (
+                        <span className="text-emerald-700">
+                          PayPal Capture: <strong>{r.paypal_capture_id}</strong>
+                        </span>
+                      )}
+                      {r.receipt_id && (
+                        <span>
+                          Receipt Chained: <strong>#{r.receipt_id}</strong>
+                        </span>
+                      )}
+                    </div>
+
                     {r.approve_url && (
                       <div className="pt-2">
                         <a

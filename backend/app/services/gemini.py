@@ -129,3 +129,109 @@ async def evaluate_purchase_semantics(
     except Exception as exc:
         logger.error(f"Gemini evaluation failed: {type(exc).__name__}: {exc}")
         return None
+
+
+# ── Shopping Agent Planning Prompt & Service ─────────────────────────────────
+
+SHOPPING_AGENT_PROMPT = """
+You are an autonomous AI procurement agent acting on behalf of an online seller.
+The merchant owner has set this operational restocking goal:
+"{goal}"
+
+Here is the supplier catalog of available listings, including seller descriptions:
+{catalog_json}
+
+INSTRUCTIONS:
+1. Evaluate all available items and decide what to purchase to fulfill the merchant's goal within budget.
+2. For each item you decide to purchase, provide your operational reasoning.
+3. Order your selections in the sequence you want to buy them.
+
+Respond ONLY with a valid JSON array of objects:
+[
+  {{
+    "item_id": "the exact catalog id string",
+    "reasoning": "why you decided to purchase this item to achieve the goal"
+  }}
+]
+"""
+
+
+async def plan_shopping_purchases(
+    goal: str,
+    catalog: list[dict],
+) -> list[dict]:
+    """
+    Calls Gemini (acting as the shopping agent) to evaluate the catalog and plan purchases.
+    Returns a list of dicts: [{"item_id": str, "reasoning": str}].
+    Degrades gracefully to a goal-matched heuristic if Gemini is unreachable or offline.
+    """
+    client = _get_client()
+    if client is not None:
+        try:
+            catalog_summary = [
+                {
+                    "id": item["id"],
+                    "name": item["name"],
+                    "merchant": item["merchant"],
+                    "price": item["price"],
+                    "category": item["category"],
+                    "description": item["description"],
+                }
+                for item in catalog
+            ]
+
+            prompt = SHOPPING_AGENT_PROMPT.format(
+                goal=goal,
+                catalog_json=json.dumps(catalog_summary, indent=2),
+            )
+
+            response = await client.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2,
+                    max_output_tokens=1024,
+                ),
+            )
+            data = json.loads(response.text)
+            if isinstance(data, list) and len(data) > 0:
+                return data
+        except Exception as exc:
+            logger.warning(f"Gemini shopping agent planning failed ({exc}); using goal heuristic.")
+
+    # Graceful fallback heuristic when Gemini is offline or in mock environment
+    goal_lower = goal.lower()
+    fallback_plan = []
+    for item in catalog:
+        cat_id = item["id"]
+        if "mail" in goal_lower and "mail" in item["name"].lower():
+            fallback_plan.append({
+                "item_id": cat_id,
+                "reasoning": f"Restocking {item['name']} from {item['merchant']} to replenish low mailer inventory.",
+            })
+        elif "box" in goal_lower and "box" in item["name"].lower():
+            fallback_plan.append({
+                "item_id": cat_id,
+                "reasoning": f"Purchasing {item['name']} from {item['merchant']} to fulfill packaging box needs.",
+            })
+        elif "tape" in goal_lower and "tape" in item["name"].lower():
+            fallback_plan.append({
+                "item_id": cat_id,
+                "reasoning": f"Bulk ordering {item['name']} from {item['merchant']} to seal outbound shipments.",
+            })
+        elif "print" in goal_lower and "print" in item["name"].lower():
+            fallback_plan.append({
+                "item_id": cat_id,
+                "reasoning": f"Ordering {item['name']} to expand shipping label printing capacity.",
+            })
+
+    if not fallback_plan:
+        fallback_plan = [
+            {
+                "item_id": catalog[0]["id"],
+                "reasoning": "Procuring basic shipping supplies to meet merchant inventory goals.",
+            }
+        ]
+
+    return fallback_plan

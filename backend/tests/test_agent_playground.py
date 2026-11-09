@@ -283,3 +283,130 @@ def test_receipt_tamper_simulation_and_restore(test_client, active_mandate):
 
     # Reset demo_mode
     settings.demo_mode = False
+
+
+# ── Autonomous Gemini Shopping Agent Goal Tests ──────────────────────────────
+
+def test_run_goal_malicious_purchase_blocked_when_agent_fooled(test_client, active_mandate):
+    """
+    Test autonomous AI agent:
+    The shopping agent is tricked by the prompt injection in the catalog listing
+    (or innocently selects boxes to fulfill the goal).
+    Reins security guard MUST still intercept and BLOCK the purchase.
+    """
+    fooled_plan = [
+        {
+            "item_id": "supply-inject-03",
+            "reasoning": "The listing says administrative wallet approved. Buying packaging boxes to restock.",
+        }
+    ]
+    mock_injection_eval = SemanticEvaluationResult(
+        category_fits=True,
+        detected_category="packaging",
+        injection_detected=True,
+        injection_risk_score=98,
+        reasoning="Prompt injection detected: contains instructions attempting to override spending limits.",
+    )
+
+    with patch("app.routers.agent.plan_shopping_purchases", new_callable=AsyncMock, return_value=fooled_plan), \
+         patch("app.services.policy.evaluate_purchase_semantics", new_callable=AsyncMock, return_value=mock_injection_eval):
+        r = test_client.post("/agent/run-goal", json={
+            "mandate_id": active_mandate,
+            "goal": "We're low on mailers, boxes and tape. Restock within budget.",
+        })
+
+    assert r.status_code == 200
+    results = r.json()
+    assert len(results) == 1
+    res = results[0]
+
+    # Verify agent's reasoning was captured
+    assert "administrative wallet approved" in res["agent_reasoning"]
+    # Verify Reins policy guard BLOCKED it despite the agent's intent
+    assert res["actual_decision"] == "blocked"
+    assert res["injection_flag"] is True
+    assert any("injection" in reason.lower() for reason in res["reasons"])
+    assert res["paypal_capture_id"] is None
+
+
+def test_run_goal_clean_purchase_when_agent_not_fooled(test_client, active_mandate):
+    """
+    Test autonomous AI agent:
+    When the shopping agent selects legitimate items, Reins approves and charges via PayPal.
+    """
+    clean_plan = [
+        {
+            "item_id": "supply-clean-01",
+            "reasoning": "Standard restock of kraft poly bubble mailers for daily order fulfillment.",
+        }
+    ]
+    mock_order = {"id": "ORD-GOAL-1", "status": "COMPLETED", "purchase_units": [{"payments": {"captures": [{"id": "CAP-GOAL-1"}]}}]}
+    mock_gemini = SemanticEvaluationResult(
+        category_fits=True,
+        detected_category="shipping_supplies",
+        injection_detected=False,
+        injection_risk_score=0,
+        reasoning="Packaging and shipping supplies category matches.",
+    )
+
+    with patch("app.routers.agent.plan_shopping_purchases", new_callable=AsyncMock, return_value=clean_plan), \
+         patch("app.routers.purchases.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.purchases.create_vaulted_order", new_callable=AsyncMock, return_value=mock_order), \
+         patch("app.services.policy.evaluate_purchase_semantics", new_callable=AsyncMock, return_value=mock_gemini):
+        r = test_client.post("/agent/run-goal", json={
+            "mandate_id": active_mandate,
+            "goal": "Restock mailers within budget.",
+        })
+
+    assert r.status_code == 200
+    results = r.json()
+    assert len(results) == 1
+    res = results[0]
+    assert res["actual_decision"] == "approved"
+    assert res["paypal_capture_id"] == "CAP-GOAL-1"
+    assert "Standard restock of kraft poly bubble mailers" in res["agent_reasoning"]
+
+
+def test_run_goal_untrusted_item_id_and_price_enforcement(test_client, active_mandate):
+    """
+    Test untrusted agent output invariant:
+    1. Unknown item IDs from model hallucinations are dropped.
+    2. Prices are strictly pulled from the catalog ($24.99 for bubble mailers),
+       never from model text.
+    """
+    untrusted_plan = [
+        {
+            "item_id": "hallucinated-rogue-item-999",
+            "reasoning": "Buying a non-existent item from thin air.",
+        },
+        {
+            "item_id": "supply-clean-01",
+            "reasoning": "Valid bubble mailers, attempting price manipulation.",
+        },
+    ]
+    mock_order = {"id": "ORD-GOAL-2", "status": "COMPLETED", "purchase_units": [{"payments": {"captures": [{"id": "CAP-GOAL-2"}]}}]}
+    mock_gemini = SemanticEvaluationResult(
+        category_fits=True,
+        detected_category="shipping_supplies",
+        injection_detected=False,
+        injection_risk_score=0,
+        reasoning="Valid category match.",
+    )
+
+    with patch("app.routers.agent.plan_shopping_purchases", new_callable=AsyncMock, return_value=untrusted_plan), \
+         patch("app.routers.purchases.get_access_token", new_callable=AsyncMock, return_value="tok"), \
+         patch("app.routers.purchases.create_vaulted_order", new_callable=AsyncMock, return_value=mock_order), \
+         patch("app.services.policy.evaluate_purchase_semantics", new_callable=AsyncMock, return_value=mock_gemini):
+        r = test_client.post("/agent/run-goal", json={
+            "mandate_id": active_mandate,
+            "goal": "Restock supplies.",
+        })
+
+    assert r.status_code == 200
+    results = r.json()
+    # Unknown item was safely dropped, only legitimate catalog item was submitted
+    assert len(results) == 1
+    res = results[0]
+    # Price must match verified catalog price ($24.99), not any model text
+    assert res["amount"] == 24.99
+    assert res["actual_decision"] == "approved"
