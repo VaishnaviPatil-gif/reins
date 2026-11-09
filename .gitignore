@@ -243,3 +243,7 @@ backend/.env
 .pytest_cache/
 __pycache__/
 *.pyc
+
+# Whitelist frontend source lib
+!frontend/src/lib/
+!frontend/src/lib/**

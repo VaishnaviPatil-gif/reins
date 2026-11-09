@@ -33,7 +33,12 @@ from app.schemas import (
 )
 from app.services.mandates import verify_mandate_token
 from app.services.policy import evaluate_purchase_policy
-from app.services.receipts import append_receipt, verify_receipt_chain, calculate_receipt_hash
+from app.services.receipts import (
+    append_receipt,
+    verify_receipt_chain,
+    calculate_receipt_hash,
+    repair_receipt_chain,
+)
 from app.services.paypal import (
     get_access_token,
     create_vaulted_order,
@@ -346,3 +351,42 @@ def verify_chain(db: Session = Depends(get_db)):
     """
     result = verify_receipt_chain(db)
     return ChainVerificationResponse(**result)
+
+
+@router.post("/receipts/simulate-tamper")
+def simulate_tamper(receipt_id: int | None = None, db: Session = Depends(get_db)):
+    """
+    Simulates direct database tampering on a receipt without updating its SHA-256 hash.
+    This demonstrates cryptographic tamper detection via verify-chain.
+    """
+    if receipt_id:
+        receipt = db.query(Receipt).filter(Receipt.id == receipt_id).first()
+    else:
+        receipt = db.query(Receipt).order_by(Receipt.id.desc()).first()
+
+    if not receipt:
+        raise HTTPException(status_code=400, detail="No receipts found to tamper with")
+
+    old_amount = receipt.amount
+    # Modify amount directly in database without updating hash
+    receipt.amount = round(receipt.amount + 50.00, 2)
+    db.commit()
+
+    return {
+        "message": f"Simulated tamper on receipt #{receipt.id}: modified amount from ${old_amount:.2f} to ${receipt.amount:.2f} without updating SHA-256 hash.",
+        "tampered_receipt_id": receipt.id,
+        "original_amount": old_amount,
+        "tampered_amount": receipt.amount,
+    }
+
+
+@router.post("/receipts/repair-chain")
+def repair_chain(db: Session = Depends(get_db)):
+    """
+    Recalculates cryptographic hashes to restore valid hash chain integrity.
+    """
+    count = repair_receipt_chain(db)
+    return {
+        "message": "Cryptographic hash chain successfully repaired",
+        "receipts_rehashed": count,
+    }

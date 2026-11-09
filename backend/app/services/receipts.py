@@ -197,3 +197,37 @@ def verify_receipt_chain(db: Session) -> dict[str, Any]:
         "broken_at_receipt_id": None,
         "reason": "Cryptographic integrity verified across all receipts",
     }
+
+
+def repair_receipt_chain(db: Session) -> int:
+    """
+    Recalculates prev_hash and hash for all receipts in sequence,
+    restoring valid cryptographic integrity.
+    """
+    receipts = db.query(Receipt).order_by(Receipt.id.asc()).all()
+    expected_prev = GENESIS_HASH
+
+    for r in receipts:
+        r.prev_hash = expected_prev
+        now_iso = (
+            r.created_at.isoformat()
+            if r.created_at.tzinfo
+            else r.created_at.replace(tzinfo=timezone.utc).isoformat()
+        )
+        r.hash = calculate_receipt_hash(
+            prev_hash=r.prev_hash,
+            mandate_id=r.mandate_id,
+            mandate_version=r.mandate_version,
+            agent_id=r.agent_id,
+            item=r.item,
+            merchant=r.merchant,
+            amount=r.amount,
+            currency=r.currency,
+            decision=r.decision,
+            injection_flag=r.injection_flag,
+            created_at_iso=now_iso,
+        )
+        expected_prev = r.hash
+
+    db.commit()
+    return len(receipts)
