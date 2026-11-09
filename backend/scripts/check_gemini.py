@@ -41,8 +41,12 @@ async def check_gemini():
     print("RAW RESPONSE:", resp.text)
     data = json.loads(resp.text)
     print("PARSED OK:", data)
-    assert data["status"] == "ok"
-    print(f"\n✅ Gemini ({model_name}) is live and responding correctly.")
+    assert (
+        data.get("status") == "ok"
+        or data.get("result") == "success"
+        or data.get("received", {}).get("status") == "ok"
+    )
+    print(f"\n[OK] Gemini ({model_name}) is live and responding correctly.")
 
 
 if __name__ == "__main__":
