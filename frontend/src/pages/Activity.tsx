@@ -11,6 +11,8 @@ import {
   fetchEscalations,
   approveEscalation,
   denyEscalation,
+  simulateTamper,
+  repairChain,
   type Receipt,
   type Escalation,
   type ChainVerification,
@@ -58,6 +60,7 @@ export default function Activity() {
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [tamperBanner, setTamperBanner] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -80,6 +83,30 @@ export default function Activity() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  const handleSimulateTamper = async () => {
+    setActionError(null)
+    setTamperBanner(null)
+    try {
+      const res = await simulateTamper()
+      setTamperBanner(res.message)
+      await loadData()
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail ?? err.message)
+    }
+  }
+
+  const handleRepairChain = async () => {
+    setActionError(null)
+    setTamperBanner(null)
+    try {
+      const res = await repairChain()
+      setTamperBanner(`${res.message} (${res.receipts_rehashed} receipts re-hashed).`)
+      await loadData()
+    } catch (err: any) {
+      setActionError(err.response?.data?.detail ?? err.message)
+    }
+  }
 
   const handleApprove = async (id: number) => {
     setActionError(null)
@@ -154,34 +181,73 @@ export default function Activity() {
           </p>
         </div>
 
-        {/* Hash Chain Integrity Indicator */}
+        {/* Hash Chain Integrity Indicator & Action Buttons */}
         {chainStatus && (
-          <div
-            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm font-medium ${
-              chainStatus.valid
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-red-50 border-red-200 text-red-800'
-            }`}
-          >
-            <span className="text-lg">{chainStatus.valid ? '🛡️' : '🚨'}</span>
-            <div>
-              <div className="font-semibold">
-                {chainStatus.valid ? 'Hash Chain Verified' : 'Chain Tampering Detected!'}
-              </div>
-              <div className="text-xs opacity-80">
-                {chainStatus.total_receipts} receipts chained via SHA-256
-                {!chainStatus.valid && ` (broken at #${chainStatus.broken_at_receipt_id})`}
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-sm font-medium ${
+                chainStatus.valid
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}
+            >
+              <span className="text-lg">{chainStatus.valid ? '🛡️' : '🚨'}</span>
+              <div>
+                <div className="font-semibold">
+                  {chainStatus.valid ? 'Hash Chain Verified' : 'Chain Tampering Detected!'}
+                </div>
+                <div className="text-xs opacity-80">
+                  {chainStatus.total_receipts} receipts chained via SHA-256
+                  {!chainStatus.valid && ` (broken at #${chainStatus.broken_at_receipt_id})`}
+                </div>
               </div>
             </div>
-            <button
-              onClick={loadData}
-              className="ml-2 px-2.5 py-1 bg-white/70 hover:bg-white rounded text-xs font-semibold border shadow-sm transition"
-            >
-              Re-Verify
-            </button>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={loadData}
+                className="px-3 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold border shadow-sm transition flex items-center gap-1.5"
+                title="Verify cryptographic SHA-256 chain across all receipts"
+              >
+                <span>🔍</span> Verify Chain
+              </button>
+
+              <button
+                onClick={handleSimulateTamper}
+                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
+                title="Simulate direct database tampering by altering a receipt amount"
+              >
+                <span>💥</span> Simulate Tamper
+              </button>
+
+              {!chainStatus.valid && (
+                <button
+                  onClick={handleRepairChain}
+                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
+                  title="Recalculate hashes to restore valid chain"
+                >
+                  <span>🔧</span> Restore Chain
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {tamperBanner && (
+        <div className="bg-indigo-50 border border-indigo-200 text-indigo-900 p-3.5 rounded-xl text-sm flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span>ℹ️</span>
+            <span>{tamperBanner}</span>
+          </div>
+          <button
+            onClick={() => setTamperBanner(null)}
+            className="text-xs text-indigo-500 hover:text-indigo-700 font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {actionError && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm">
