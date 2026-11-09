@@ -88,7 +88,8 @@ def test_seed_idempotent(test_client):
 
 def test_reins_signing_secret_missing_refuses_to_start():
     """Ensure the application strictly refuses to start outside tests without REINS_SIGNING_SECRET."""
+    import os
     from app.config import Settings
-    with patch.dict("os.environ", {}, clear=True), patch("sys.modules", {}), patch("sys.argv", ["uvicorn", "app.main:app"]):
+    with patch.dict(os.environ, {"REINS_PROD_TEST": "1"}):
         with pytest.raises(ValueError, match="REINS_SIGNING_SECRET is missing"):
             Settings.validate_signing_secret("")

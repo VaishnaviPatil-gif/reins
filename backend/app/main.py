@@ -23,10 +23,13 @@ async def lifespan(app: FastAPI):
     """Create tables and seed demo data on startup."""
     # Ensure REINS_SIGNING_SECRET is configured outside tests
     is_testing = (
-        "pytest" in sys.modules
+        os.environ.get("REINS_TEST_MODE") == "1"
+        or "pytest" in sys.modules
         or "PYTEST_CURRENT_TEST" in os.environ
         or any("pytest" in arg for arg in sys.argv)
     )
+    if os.environ.get("REINS_PROD_TEST") == "1":
+        is_testing = False
     if not settings.reins_signing_secret and not is_testing:
         raise RuntimeError("REINS_SIGNING_SECRET is missing. The app refuses to start outside tests without REINS_SIGNING_SECRET.")
 

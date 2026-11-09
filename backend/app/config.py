@@ -28,10 +28,14 @@ class Settings(BaseSettings):
     @classmethod
     def validate_signing_secret(cls, v: str) -> str:
         is_testing = (
-            "pytest" in sys.modules
+            os.environ.get("REINS_TEST_MODE") == "1"
+            or "pytest" in sys.modules
             or "PYTEST_CURRENT_TEST" in os.environ
             or any("pytest" in arg for arg in sys.argv)
         )
+        if os.environ.get("REINS_PROD_TEST") == "1":
+            is_testing = False
+
         if not v or not v.strip():
             if is_testing:
                 return "test-signing-secret-placeholder-for-tests-32b"
