@@ -133,6 +133,7 @@ export interface ScenarioResult {
   receipt_id: number | null
   escalation_id: number | null
   paypal_capture_id: string | null
+  approve_url?: string | null
   message: string
 }
 

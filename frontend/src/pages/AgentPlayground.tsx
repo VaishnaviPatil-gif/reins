@@ -390,6 +390,18 @@ export default function AgentPlayground() {
                         <span className="font-semibold">Receipt Hash Chained:</span> #{r.receipt_id}
                       </div>
                     )}
+                    {r.approve_url && (
+                      <div className="pt-2">
+                        <a
+                          href={r.approve_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow transition"
+                        >
+                          <span>💳</span> Approve in PayPal (Fallback Mode) →
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
               )

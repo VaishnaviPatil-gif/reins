@@ -399,6 +399,25 @@ export default function Activity() {
               </ul>
             </div>
 
+            {selectedReceipt.evidence?.approve_url && (
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl space-y-2">
+                <div className="font-semibold text-xs text-blue-900 uppercase">
+                  PayPal Vault Fallback — Buyer Approval Required
+                </div>
+                <p className="text-xs text-blue-700">
+                  This purchase was policy-approved in fallback mode without an automated server-side vault token.
+                </p>
+                <a
+                  href={selectedReceipt.evidence.approve_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow transition"
+                >
+                  <span>💳</span> Approve in PayPal →
+                </a>
+              </div>
+            )}
+
             <div className="bg-slate-900 text-slate-100 rounded-xl p-4 space-y-2 text-xs font-mono">
               <div className="text-slate-400 text-[10px] uppercase tracking-wider font-sans font-bold">
                 Cryptographic Chaining

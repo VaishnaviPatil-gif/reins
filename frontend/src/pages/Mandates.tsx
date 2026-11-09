@@ -4,6 +4,7 @@
  * Right: "New Mandate" builder form + Link PayPal button.
  */
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import type { ColDef, ICellRendererParams } from 'ag-grid-community'
 import {
@@ -71,6 +72,9 @@ export default function Mandates() {
   const [linkingId, setLinkingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const isLinked = searchParams.get('linked') === '1'
+  const linkError = searchParams.get('link_error')
 
   // Form state
   const [form, setForm] = useState<Partial<MandateCreate>>({
@@ -221,6 +225,57 @@ export default function Mandates() {
           {showForm ? '✕ Cancel' : '+ New Mandate'}
         </button>
       </div>
+
+      {/* Link PayPal Redirect Banners */}
+      {isLinked && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🎉</span>
+            <div>
+              <div className="font-bold text-sm">PayPal Account Linked Successfully!</div>
+              <div className="text-xs text-emerald-700">
+                Your payment method is vaulted with PayPal. Mandate is now active and authorized for autonomous agent purchases.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              searchParams.delete('linked')
+              setSearchParams(searchParams)
+            }}
+            className="text-xs font-semibold text-emerald-600 hover:text-emerald-800"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {linkError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <div className="font-bold text-sm">PayPal Vault Linking Error ({linkError})</div>
+              <div className="text-xs text-rose-700">
+                {linkError === 'vault_failed'
+                  ? 'PayPal did not return status VAULTED. Ensure Reference Transactions / Vaulting is enabled in your PayPal Developer sandbox account.'
+                  : linkError === 'cancelled'
+                  ? 'PayPal approval was cancelled by the user. The mandate remains in pending_link state.'
+                  : `PayPal approval could not be finalized: ${linkError}`}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              searchParams.delete('link_error')
+              setSearchParams(searchParams)
+            }}
+            className="text-xs font-semibold text-rose-600 hover:text-rose-800"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Alerts */}
       {error && (
