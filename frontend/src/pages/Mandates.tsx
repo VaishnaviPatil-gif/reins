@@ -21,13 +21,13 @@ import {
 // ── Status badge cell renderer ────────────────────────────────────────────────
 function StatusBadge({ value }: ICellRendererParams) {
   const styles: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    pending_link: 'bg-yellow-100 text-yellow-700',
-    revoked: 'bg-red-100 text-red-700',
+    active: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    pending_link: 'bg-amber-50 text-amber-800 border border-amber-200',
+    revoked: 'bg-rose-50 text-rose-700 border border-rose-200',
   }
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${styles[value] ?? 'bg-gray-100 text-gray-600'}`}>
-      {value}
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${styles[value] ?? 'bg-gray-100 text-gray-600'}`}>
+      {value === 'active' ? 'Active' : value === 'pending_link' ? 'Pending Link' : value === 'revoked' ? 'Revoked' : value}
     </span>
   )
 }
@@ -37,14 +37,14 @@ function BudgetBar({ data }: ICellRendererParams) {
   if (!data) return null
   const pct = Math.min((data.budget_spent / data.budget_total) * 100, 100)
   return (
-    <div className="flex items-center gap-2 h-full">
-      <div className="flex-1 bg-gray-200 rounded-full h-2">
+    <div className="flex items-center gap-2.5 h-full">
+      <div className="flex-1 bg-[#eef2f6] rounded-full h-2 overflow-hidden">
         <div
-          className={`h-2 rounded-full ${pct > 80 ? 'bg-red-500' : 'bg-brand-500'}`}
+          className={`h-2 rounded-full transition-all ${pct > 80 ? 'bg-rose-500' : 'bg-gradient-to-r from-[#003087] to-[#009cde]'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-xs text-gray-600 whitespace-nowrap">
+      <span className="text-xs font-semibold text-[#0c1c3e] tabular-nums whitespace-nowrap">
         ${data.budget_spent.toFixed(2)} / ${data.budget_total.toFixed(2)}
       </span>
     </div>
@@ -53,11 +53,11 @@ function BudgetBar({ data }: ICellRendererParams) {
 
 // ── Tag list helper ───────────────────────────────────────────────────────────
 function TagList({ value }: ICellRendererParams) {
-  if (!value || value.length === 0) return <span className="text-gray-400 text-xs">any</span>
+  if (!value || value.length === 0) return <span className="text-[#5c6a82] text-xs">any</span>
   return (
     <div className="flex flex-wrap gap-1">
       {(value as string[]).map((t: string) => (
-        <span key={t} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">{t}</span>
+        <span key={t} className="px-2 py-0.5 bg-[#f0f7fc] text-[#003087] border border-[#dceefa] rounded-full text-[11px] font-medium">{t}</span>
       ))}
     </div>
   )
@@ -167,20 +167,20 @@ export default function Mandates() {
       cellRenderer: (p: ICellRendererParams<Mandate>) => {
         const m = p.data!
         return (
-          <div className="flex gap-1 items-center h-full">
+          <div className="flex gap-1.5 items-center h-full">
             {m.status === 'pending_link' && (
               <button
                 onClick={() => handleLinkPayPal(m.id)}
                 disabled={linkingId === m.id}
-                className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+                className="px-3 py-1 bg-[#ffc439] hover:bg-[#f2b82b] text-[#003087] text-xs font-bold rounded-full shadow-sm disabled:opacity-50 transition"
               >
-                {linkingId === m.id ? '…' : '🔗 Link PayPal'}
+                {linkingId === m.id ? 'Linking…' : 'Link PayPal'}
               </button>
             )}
             {m.status === 'active' && (
               <button
                 onClick={() => handleRevoke(m.id)}
-                className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200"
+                className="px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold rounded-full hover:bg-rose-100 transition"
               >
                 Revoke
               </button>
@@ -188,7 +188,7 @@ export default function Mandates() {
             {m.status === 'active' && (
               <button
                 onClick={() => handleLinkPayPal(m.id)}
-                className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200"
+                className="px-3 py-1 bg-[#f5f7fa] text-[#003087] border border-[#e5e9f0] text-xs font-semibold rounded-full hover:bg-[#e8edf5] transition"
                 title="Refresh vault link"
               >
                 Re-link
@@ -211,16 +211,20 @@ export default function Mandates() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mandates</h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Scoped, revocable spending permissions you grant to AI agents.
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#003087] tracking-tight">Wallet & Spending Mandates</h1>
+          <p className="text-[#5c6a82] mt-1 text-sm">
+            Scoped, revocable spending rules linked directly to your PayPal Vault funding source.
           </p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700"
+          className={`px-5 py-2.5 rounded-full text-sm font-semibold shadow-sm transition self-start sm:self-auto ${
+            showForm
+              ? 'bg-white border border-[#e5e9f0] text-[#0c1c3e] hover:bg-gray-50'
+              : 'bg-[#0070ba] hover:bg-[#005ea6] text-white'
+          }`}
         >
           {showForm ? '✕ Cancel' : '+ New Mandate'}
         </button>
@@ -228,12 +232,14 @@ export default function Mandates() {
 
       {/* Link PayPal Redirect Banners */}
       {isLinked && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-xl flex items-center justify-between shadow-sm">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-2xl flex items-center justify-between shadow-pp-card">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🎉</span>
+            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              ✓
+            </div>
             <div>
               <div className="font-bold text-sm">PayPal Account Linked Successfully!</div>
-              <div className="text-xs text-emerald-700">
+              <div className="text-xs text-emerald-800">
                 Your payment method is vaulted with PayPal. Mandate is now active and authorized for autonomous agent purchases.
               </div>
             </div>
@@ -243,7 +249,7 @@ export default function Mandates() {
               searchParams.delete('linked')
               setSearchParams(searchParams)
             }}
-            className="text-xs font-semibold text-emerald-600 hover:text-emerald-800"
+            className="text-xs font-bold text-emerald-700 hover:text-emerald-900 px-3 py-1 rounded-full hover:bg-emerald-100 transition"
           >
             Dismiss
           </button>
@@ -251,7 +257,7 @@ export default function Mandates() {
       )}
 
       {linkError && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-xl flex items-center justify-between shadow-sm">
+        <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-2xl flex items-center justify-between shadow-pp-card">
           <div className="flex items-center gap-3">
             <span className="text-2xl">⚠️</span>
             <div>
@@ -270,7 +276,7 @@ export default function Mandates() {
               searchParams.delete('link_error')
               setSearchParams(searchParams)
             }}
-            className="text-xs font-semibold text-rose-600 hover:text-rose-800"
+            className="text-xs font-bold text-rose-600 hover:text-rose-800 px-3 py-1 rounded-full hover:bg-rose-100 transition"
           >
             Dismiss
           </button>
@@ -279,72 +285,72 @@ export default function Mandates() {
 
       {/* Alerts */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm whitespace-pre-wrap">{error}</div>
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-rose-800 text-sm whitespace-pre-wrap shadow-sm">{error}</div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm whitespace-pre-wrap">
-          {success}
-          <button onClick={() => setSuccess(null)} className="ml-2 text-green-500 hover:text-green-700">✕</button>
+        <div className="bg-[#f0f7fc] border border-[#b6dcf7] rounded-2xl p-4 text-[#003087] text-sm whitespace-pre-wrap flex items-start justify-between gap-3 shadow-sm">
+          <span>{success}</span>
+          <button onClick={() => setSuccess(null)} className="text-[#0070ba] hover:text-[#003087] font-bold">✕</button>
         </div>
       )}
 
       {/* New Mandate Form */}
       {showForm && (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800">New Mandate</h2>
-          <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white border border-[#e5e9f0] rounded-2xl shadow-pp-card p-6 space-y-5">
+          <h2 className="font-bold text-[#003087] text-base">Create Spending Mandate</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Agent */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Agent</label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">Agent</label>
               <select
                 value={form.agent_id}
                 onChange={(e) => setForm((f) => ({ ...f, agent_id: Number(e.target.value) }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-[#d6dce5] rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
               >
                 {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             {/* Budget Total */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Total Budget ($)</label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">Total Budget ($)</label>
               <input type="number" min="0" step="0.01"
                 value={form.budget_total}
                 onChange={(e) => setForm((f) => ({ ...f, budget_total: Number(e.target.value) }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-[#d6dce5] rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
               />
             </div>
             {/* Per-purchase cap */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Per-Purchase Cap ($)</label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">Per-Purchase Cap ($)</label>
               <input type="number" min="0" step="0.01"
                 value={form.per_purchase_cap}
                 onChange={(e) => setForm((f) => ({ ...f, per_purchase_cap: Number(e.target.value) }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-[#d6dce5] rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
               />
             </div>
             {/* Escalate above */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Escalate If Above ($) <span className="text-gray-400">optional</span></label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">Escalate If Above ($) <span className="text-gray-400 font-normal">optional</span></label>
               <input type="number" min="0" step="0.01"
                 value={form.escalate_above ?? ''}
                 onChange={(e) => setForm((f) => ({ ...f, escalate_above: e.target.value ? Number(e.target.value) : undefined }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-[#d6dce5] rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
               />
             </div>
             {/* Valid From */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Valid From <span className="text-gray-400">optional</span></label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">Valid From <span className="text-gray-400 font-normal">optional</span></label>
               <input type="datetime-local"
                 onChange={(e) => setForm((f) => ({ ...f, valid_from: e.target.value ? new Date(e.target.value).toISOString() : undefined }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-[#d6dce5] rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
               />
             </div>
             {/* Valid Until */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Valid Until <span className="text-gray-400">optional</span></label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">Valid Until <span className="text-gray-400 font-normal">optional</span></label>
               <input type="datetime-local"
                 onChange={(e) => setForm((f) => ({ ...f, valid_until: e.target.value ? new Date(e.target.value).toISOString() : undefined }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
+                className="w-full border border-[#d6dce5] rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
               />
             </div>
           </div>
@@ -356,23 +362,23 @@ export default function Mandates() {
             { label: 'Blocked Merchants', field: 'blocked_merchants' as const, state: blockInput, setState: setBlockInput },
           ]).map(({ label, field, state, setState }) => (
             <div key={field}>
-              <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+              <label className="block text-xs font-semibold text-[#5c6a82] mb-1">{label}</label>
               <div className="flex gap-2">
                 <input
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { addTag(field, state); setState('') } }}
                   placeholder="Type and press Enter"
-                  className="flex-1 border rounded-lg px-3 py-1.5 text-sm"
+                  className="flex-1 border border-[#d6dce5] rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
                 />
                 <button onClick={() => { addTag(field, state); setState('') }}
-                  className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200">Add</button>
+                  className="px-4 py-2 bg-[#f5f7fa] hover:bg-[#e8edf5] text-[#003087] font-semibold rounded-full text-xs transition">Add</button>
               </div>
-              <div className="flex flex-wrap gap-1 mt-1">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {(form[field] ?? []).map((t) => (
-                  <span key={t} className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs">
+                  <span key={t} className="flex items-center gap-1.5 px-2.5 py-0.5 bg-[#f0f7fc] text-[#003087] border border-[#dceefa] rounded-full text-xs font-medium">
                     {t}
-                    <button onClick={() => removeTag(field, t)} className="text-blue-400 hover:text-blue-600">✕</button>
+                    <button onClick={() => removeTag(field, t)} className="text-[#0070ba] hover:text-[#003087]">✕</button>
                   </span>
                 ))}
               </div>
@@ -380,40 +386,50 @@ export default function Mandates() {
           ))}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-            <button onClick={handleCreate} className="px-4 py-2 bg-brand-600 text-white text-sm rounded-lg hover:bg-brand-700">
+            <button onClick={() => setShowForm(false)} className="px-5 py-2 text-sm font-semibold text-[#5c6a82] hover:text-[#0c1c3e]">Cancel</button>
+            <button onClick={handleCreate} className="px-6 py-2 bg-[#0070ba] hover:bg-[#005ea6] text-white text-sm font-semibold rounded-full shadow-sm transition">
               Create Mandate
             </button>
           </div>
         </div>
       )}
 
-      {/* AG Grid Table */}
-      <div className="ag-theme-alpine w-full relative" style={{ height: 420 }}>
-        {loading && (
-          <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-10">
-            <span className="text-sm font-medium text-gray-500">Loading mandates...</span>
-          </div>
-        )}
-        <AgGridReact<Mandate>
-          rowData={mandates}
-          columnDefs={colDefs}
-          animateRows
-          rowHeight={48}
-          defaultColDef={{ resizable: true, sortable: true }}
-        />
+      {/* AG Grid Table Card */}
+      <div className="bg-white rounded-2xl border border-[#e5e9f0] shadow-pp-card p-5 space-y-3">
+        <div className="flex justify-between items-center">
+          <h2 className="font-bold text-[#003087] text-sm">Authorized Spending Mandates</h2>
+          <span className="text-xs font-medium text-[#5c6a82]">{mandates.length} mandate{mandates.length === 1 ? '' : 's'}</span>
+        </div>
+
+        <div className="ag-theme-alpine w-full relative" style={{ height: 420 }}>
+          {loading && (
+            <div className="absolute inset-0 bg-white/75 flex items-center justify-center z-10 rounded-xl">
+              <span className="text-sm font-semibold text-[#003087]">Loading mandates...</span>
+            </div>
+          )}
+          <AgGridReact<Mandate>
+            rowData={mandates}
+            columnDefs={colDefs}
+            animateRows
+            rowHeight={50}
+            defaultColDef={{ resizable: true, sortable: true }}
+          />
+        </div>
       </div>
 
       {/* Link PayPal instructions box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        <p className="font-semibold mb-1">🔗 How "Link PayPal" works</p>
-        <ol className="list-decimal list-inside space-y-1 text-blue-700">
+      <div className="bg-white border border-[#e5e9f0] rounded-2xl p-6 shadow-pp-card text-sm">
+        <div className="flex items-center gap-2.5 mb-3">
+          <span className="px-2.5 py-0.5 rounded-full bg-[#e8f4fd] text-[#003087] text-xs font-bold">PayPal Vault</span>
+          <p className="font-bold text-[#003087]">How "Link PayPal" works</p>
+        </div>
+        <ol className="list-decimal list-inside space-y-1.5 text-xs sm:text-sm text-[#5c6a82]">
           <li>Create a mandate with your spending rules above.</li>
-          <li>Click <strong>Link PayPal</strong> — a \$1 authorization opens in a new tab.</li>
-          <li>Log in with your <strong>sandbox buyer account</strong> (not your developer account) and approve.</li>
-          <li>You'll be redirected back — the \$1 is immediately refunded and the mandate becomes <span className="font-semibold text-green-700">active</span>.</li>
+          <li>Click <strong className="text-[#0c1c3e]">Link PayPal</strong> — a $1.00 authorization opens in a new tab.</li>
+          <li>Log in with your <strong className="text-[#0c1c3e]">US Sandbox Personal (Buyer)</strong> account and approve.</li>
+          <li>You'll be redirected back — the $1.00 is immediately refunded and the mandate becomes <span className="font-semibold text-emerald-700">Active</span>.</li>
           <li>The agent can now spend through this mandate server-side — no future clicks needed.</li>
-          <li>Click <strong>Revoke</strong> at any time to instantly cut off the agent.</li>
+          <li>Click <strong className="text-[#0c1c3e]">Revoke</strong> at any time to delete the PayPal Vault token and cut off the agent immediately.</li>
         </ol>
       </div>
     </div>
