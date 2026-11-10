@@ -1,4 +1,4 @@
-/* AG Grid theme — alpine gives us a clean, modern look */
+/* AG Grid theme — tailored to PayPal clean fintech ledger */
 @import 'ag-grid-community/styles/ag-grid.css';
 @import 'ag-grid-community/styles/ag-theme-alpine.css';
 
@@ -7,5 +7,34 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900 font-sans;
+  @apply bg-[#f5f7fa] text-[#0c1c3e] font-sans antialiased;
+}
+
+/* PayPal-styled AG Grid theme overrides */
+.ag-theme-alpine {
+  --ag-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ag-font-size: 13px;
+  --ag-background-color: #ffffff;
+  --ag-header-background-color: #f5f7fa;
+  --ag-header-foreground-color: #003087;
+  --ag-border-color: #e5e9f0;
+  --ag-row-border-color: #eef2f6;
+  --ag-row-hover-color: #f0f7fc;
+  --ag-selected-row-background-color: #e6f2fa;
+  --ag-header-cell-hover-background-color: #eaf2fa;
+  --ag-range-selection-border-color: #0070ba;
+  --ag-border-radius: 12px;
+}
+
+.ag-theme-alpine .ag-root-wrapper {
+  border-radius: 12px;
+  border: 1px solid #e5e9f0;
+}
+
+.ag-theme-alpine .ag-header-cell-label {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5c6a82;
 }
