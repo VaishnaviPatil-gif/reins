@@ -3,7 +3,7 @@
  * Left: AG Grid table of all mandates.
  * Right: "New Mandate" builder form + Link PayPal button.
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AgGridReact } from 'ag-grid-react'
 import type { ColDef, ICellRendererParams } from 'ag-grid-community'
@@ -64,12 +64,34 @@ function TagList({ value }: ICellRendererParams) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
+function decodeJwtPayload(token: string | null): Record<string, any> | null {
+  if (!token) return null
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
 export default function Mandates() {
+  const gridRef = useRef<AgGridReact<Mandate>>(null)
   const [mandates, setMandates] = useState<Mandate[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [linkingId, setLinkingId] = useState<number | null>(null)
+  const [inspectedMandate, setInspectedMandate] = useState<Mandate | null>(null)
+  const [copiedToken, setCopiedToken] = useState(false)
+  const [quickFilter, setQuickFilter] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -163,7 +185,7 @@ export default function Mandates() {
       valueFormatter: (p) => p.value ? `${p.value.slice(0, 12)}…` : '—' },
     {
       headerName: 'Actions',
-      width: 220,
+      width: 270,
       cellRenderer: (p: ICellRendererParams<Mandate>) => {
         const m = p.data!
         return (
@@ -175,6 +197,18 @@ export default function Mandates() {
                 className="px-3 py-1 bg-[#ffc439] hover:bg-[#f2b82b] text-[#003087] text-xs font-bold rounded-full shadow-sm disabled:opacity-50 transition"
               >
                 {linkingId === m.id ? 'Linking…' : 'Link PayPal'}
+              </button>
+            )}
+            {m.token && (
+              <button
+                onClick={() => {
+                  setCopiedToken(false)
+                  setInspectedMandate(m)
+                }}
+                className="px-3 py-1 bg-[#f0f7fc] text-[#0070ba] border border-[#b6dcf7] text-xs font-semibold rounded-full hover:bg-[#e1f0fb] transition"
+                title="Inspect scoped HMAC JWT token"
+              >
+                Inspect JWT
               </button>
             )}
             {m.status === 'active' && (
@@ -395,10 +429,27 @@ export default function Mandates() {
       )}
 
       {/* AG Grid Table Card */}
-      <div className="bg-white rounded-2xl border border-[#e5e9f0] shadow-pp-card p-5 space-y-3">
-        <div className="flex justify-between items-center">
-          <h2 className="font-bold text-[#003087] text-sm">Authorized Spending Mandates</h2>
-          <span className="text-xs font-medium text-[#5c6a82]">{mandates.length} mandate{mandates.length === 1 ? '' : 's'}</span>
+      <div className="bg-white rounded-2xl border border-[#e5e9f0] shadow-pp-card p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-[#003087] text-sm">Authorized Spending Mandates</h2>
+            <p className="text-xs text-[#5c6a82]">{mandates.length} mandate{mandates.length === 1 ? '' : 's'} configured</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Filter mandates..."
+              className="px-3.5 py-1.5 bg-[#f5f7fa] border border-[#d6dce5] rounded-full text-xs text-[#0c1c3e] focus:bg-white focus:ring-2 focus:ring-[#0070ba] focus:outline-none w-48"
+            />
+            <button
+              onClick={() => gridRef.current?.api.exportDataAsCsv({ fileName: 'reins-mandates.csv' })}
+              className="px-4 py-1.5 bg-white hover:bg-[#f0f7fc] text-[#0070ba] border border-[#0070ba] rounded-full text-xs font-bold transition"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
 
         <div className="ag-theme-alpine w-full relative" style={{ height: 420 }}>
@@ -408,11 +459,13 @@ export default function Mandates() {
             </div>
           )}
           <AgGridReact<Mandate>
+            ref={gridRef}
             rowData={mandates}
             columnDefs={colDefs}
+            quickFilterText={quickFilter}
             animateRows
             rowHeight={50}
-            defaultColDef={{ resizable: true, sortable: true }}
+            defaultColDef={{ resizable: true, sortable: true, filter: true }}
           />
         </div>
       </div>
@@ -432,6 +485,82 @@ export default function Mandates() {
           <li>Click <strong className="text-[#0c1c3e]">Revoke</strong> at any time to delete the PayPal Vault token and cut off the agent immediately.</li>
         </ol>
       </div>
+
+      {/* Scoped JWT Mandate Token Inspector Modal */}
+      {inspectedMandate && (
+        <div className="fixed inset-0 bg-[#001c64]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-7 space-y-5 shadow-2xl border border-[#e5e9f0]">
+            <div className="flex justify-between items-start border-b border-[#eef2f6] pb-4">
+              <div>
+                <h3 className="text-lg font-extrabold text-[#003087]">
+                  OAuth for Your Wallet — Mandate #{inspectedMandate.id} Token
+                </h3>
+                <p className="text-xs text-[#5c6a82] mt-1">
+                  This HMAC-SHA256 signed JWT is the only credential the AI agent receives.
+                </p>
+              </div>
+              <button
+                onClick={() => setInspectedMandate(null)}
+                className="w-8 h-8 rounded-full bg-[#f5f7fa] hover:bg-gray-200 text-[#5c6a82] flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4 text-xs">
+              <div className="bg-[#f0f7fc] border border-[#b6dcf7] rounded-2xl p-4 space-y-1.5">
+                <div className="font-bold text-[#003087]">What the AI Agent Holds</div>
+                <p className="text-[#5c6a82]">
+                  Scoped, versioned JWT mandate token bound to ${inspectedMandate.per_purchase_cap.toFixed(2)} max/order and ${inspectedMandate.budget_total.toFixed(2)} budget.
+                </p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1.5">
+                <div className="font-bold text-emerald-900">Locked Inside Reins Server</div>
+                <p className="text-emerald-800 font-mono">
+                  vault_id: {inspectedMandate.vault_id ?? 'Not linked yet'}
+                </p>
+                <p className="text-emerald-700">Never exposed to any LLM prompt or agent memory.</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#5c6a82]">Signed Mandate JWT</span>
+                <button
+                  onClick={() => {
+                    if (inspectedMandate.token) {
+                      navigator.clipboard?.writeText(inspectedMandate.token)
+                      setCopiedToken(true)
+                    }
+                  }}
+                  className="text-xs font-bold text-[#0070ba] hover:underline"
+                >
+                  {copiedToken ? '✓ Copied to clipboard' : 'Copy Token'}
+                </button>
+              </div>
+              <div className="bg-[#001c64] text-sky-100 rounded-2xl p-4 font-mono text-xs break-all select-all">
+                {inspectedMandate.token}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#5c6a82]">Decoded Claims Payload</span>
+              <pre className="bg-[#f5f7fa] border border-[#e5e9f0] rounded-2xl p-4 font-mono text-xs text-[#0c1c3e] overflow-x-auto">
+                {JSON.stringify(decodeJwtPayload(inspectedMandate.token), null, 2)}
+              </pre>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setInspectedMandate(null)}
+                className="px-6 py-2 bg-[#0070ba] hover:bg-[#005ea6] text-white rounded-full text-sm font-semibold transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
