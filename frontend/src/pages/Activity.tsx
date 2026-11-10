@@ -2,9 +2,9 @@
  * Activity page — Audit trail of all purchases, cryptographic hash chain integrity,
  * and human one-tap escalation actions.
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { AgGridReact } from 'ag-grid-react'
-import type { ColDef, RowClickedEvent } from 'ag-grid-community'
+import type { ColDef, RowClickedEvent, RowClassParams } from 'ag-grid-community'
 import {
   fetchReceipts,
   verifyChain,
@@ -54,6 +54,7 @@ function HashCell({ value }: { value?: string }) {
 }
 
 export default function Activity() {
+  const gridRef = useRef<AgGridReact<Receipt>>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [escalations, setEscalations] = useState<Escalation[]>([])
   const [chainStatus, setChainStatus] = useState<ChainVerification | null>(null)
@@ -61,6 +62,27 @@ export default function Activity() {
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<string | null>(null)
   const [tamperBanner, setTamperBanner] = useState<string | null>(null)
+  const [quickFilter, setQuickFilter] = useState('')
+  const [decisionFilter, setDecisionFilter] = useState<'all' | 'approved' | 'blocked' | 'escalated' | 'injections'>('all')
+
+  const filteredReceipts = useMemo(() => {
+    if (decisionFilter === 'all') return receipts
+    if (decisionFilter === 'injections') return receipts.filter((r) => r.injection_flag)
+    return receipts.filter((r) => r.decision === decisionFilter)
+  }, [receipts, decisionFilter])
+
+  const stats = useMemo(() => {
+    const approvedSum = receipts.filter((r) => r.decision === 'approved').reduce((acc, r) => acc + r.amount, 0)
+    const blockedSum = receipts.filter((r) => r.decision === 'blocked').reduce((acc, r) => acc + r.amount, 0)
+    const injectionCount = receipts.filter((r) => r.injection_flag).length
+    return { approvedSum, blockedSum, injectionCount }
+  }, [receipts])
+
+  const handleExportCsv = () => {
+    gridRef.current?.api.exportDataAsCsv({
+      fileName: `reins-audit-ledger-${new Date().toISOString().slice(0, 10)}.csv`,
+    })
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -311,24 +333,111 @@ export default function Activity() {
         </div>
       )}
 
+      {/* Live Guardrail Value Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-[#e5e9f0] rounded-2xl p-4 shadow-pp-card flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#5c6a82]">Executed via PayPal Vault</div>
+            <div className="text-xl font-extrabold text-[#003087] tabular-nums mt-0.5">${stats.approvedSum.toFixed(2)}</div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+            Approved
+          </span>
+        </div>
+        <div className="bg-white border border-[#e5e9f0] rounded-2xl p-4 shadow-pp-card flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#5c6a82]">Unauthorized Spend Prevented</div>
+            <div className="text-xl font-extrabold text-rose-700 tabular-nums mt-0.5">${stats.blockedSum.toFixed(2)}</div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200">
+            Blocked
+          </span>
+        </div>
+        <div className="bg-white border border-[#e5e9f0] rounded-2xl p-4 shadow-pp-card flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#5c6a82]">Prompt Injections Stopped</div>
+            <div className="text-xl font-extrabold text-[#0c1c3e] tabular-nums mt-0.5">{stats.injectionCount}</div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-[#f0f7fc] text-[#003087] text-xs font-bold border border-[#b6dcf7]">
+            Gemini Guard
+          </span>
+        </div>
+      </div>
+
       {/* AG Grid Table */}
-      <div className="bg-white border border-[#e5e9f0] rounded-2xl p-5 shadow-pp-card space-y-3">
-        <div className="flex justify-between items-center">
-          <h2 className="font-bold text-[#003087] text-sm">Transaction & Reasoning Audit Chain (Click row for receipt)</h2>
-          <span className="text-xs font-medium text-[#5c6a82]">{receipts.length} total attempts</span>
+      <div className="bg-white border border-[#e5e9f0] rounded-2xl p-5 shadow-pp-card space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-[#003087] text-sm">Transaction & Reasoning Audit Chain</h2>
+            <p className="text-xs text-[#5c6a82]">Click any row to inspect policy rationale, PayPal Capture ID, and SHA-256 hash proof.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Search items, merchants, captures..."
+              className="px-3.5 py-1.5 bg-[#f5f7fa] border border-[#d6dce5] rounded-full text-xs text-[#0c1c3e] focus:bg-white focus:ring-2 focus:ring-[#0070ba] focus:outline-none w-56"
+            />
+            <button
+              onClick={handleExportCsv}
+              className="px-4 py-1.5 bg-white hover:bg-[#f0f7fc] text-[#0070ba] border border-[#0070ba] rounded-full text-xs font-bold transition"
+              title="Download filtered audit trail as CSV"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
 
-        <div className="ag-theme-alpine w-full relative" style={{ height: 420 }}>
+        {/* Decision Filter Pills */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              { key: 'all', label: `All (${receipts.length})` },
+              { key: 'approved', label: 'Approved' },
+              { key: 'blocked', label: 'Blocked' },
+              { key: 'escalated', label: 'Escalated' },
+              { key: 'injections', label: `Prompt Attacks (${stats.injectionCount})` },
+            ] as const).map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setDecisionFilter(tab.key)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+                  decisionFilter === tab.key
+                    ? 'bg-[#003087] text-white'
+                    : 'bg-[#f5f7fa] text-[#5c6a82] hover:bg-[#e8edf5]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs font-medium text-[#5c6a82]">Showing {filteredReceipts.length} of {receipts.length} receipts</span>
+        </div>
+
+        <div className="ag-theme-alpine w-full relative" style={{ height: 480 }}>
           {loading && (
             <div className="absolute inset-0 bg-white/75 flex items-center justify-center z-10 rounded-xl">
               <span className="text-sm font-semibold text-[#003087]">Loading activity ledger...</span>
             </div>
           )}
           <AgGridReact<Receipt>
-            rowData={receipts}
+            ref={gridRef}
+            rowData={filteredReceipts}
             columnDefs={colDefs}
+            quickFilterText={quickFilter}
             animateRows
+            pagination
+            paginationPageSize={10}
+            paginationPageSizeSelector={[10, 25, 50]}
             rowHeight={48}
+            getRowStyle={(params: RowClassParams<Receipt>) => {
+              if (chainStatus && !chainStatus.valid && params.data?.id === chainStatus.broken_at_receipt_id) {
+                return { backgroundColor: '#fff1f2', fontWeight: '600' }
+              }
+              return undefined
+            }}
             onRowClicked={(e: RowClickedEvent<Receipt>) => setSelectedReceipt(e.data ?? null)}
             defaultColDef={{ resizable: true, sortable: true, filter: true }}
           />
