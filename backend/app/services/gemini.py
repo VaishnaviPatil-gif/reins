@@ -116,7 +116,7 @@ async def evaluate_purchase_semantics(
             config=genai_types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
-                max_output_tokens=512,
+                max_output_tokens=2048,
             ),
         )
         raw = response.text
@@ -191,7 +191,7 @@ async def plan_shopping_purchases(
                 config=genai_types.GenerateContentConfig(
                     response_mime_type="application/json",
                     temperature=0.2,
-                    max_output_tokens=1024,
+                    max_output_tokens=2048,
                 ),
             )
             data = json.loads(response.text)
