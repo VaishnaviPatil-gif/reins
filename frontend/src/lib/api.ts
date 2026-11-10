@@ -203,3 +203,25 @@ export const repairChain = () =>
     message: string
     receipts_rehashed: number
   }>('/purchases/receipts/repair-chain').then((r) => r.data)
+
+export interface PurchaseAttemptPayload {
+  mandate_token: string
+  item: string
+  merchant: string
+  amount: number
+  currency?: string
+  category?: string
+  agent_plan?: string
+  evidence?: Record<string, any>
+}
+
+export interface PurchaseAttemptResponse {
+  decision: 'approved' | 'blocked' | 'escalated'
+  receipt: Receipt
+  message: string
+  escalation_id?: number | null
+  approve_url?: string | null
+}
+
+export const attemptPurchase = (body: PurchaseAttemptPayload) =>
+  api.post<PurchaseAttemptResponse>('/purchases/attempt', body).then((r) => r.data)
