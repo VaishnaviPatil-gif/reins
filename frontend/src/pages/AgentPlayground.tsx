@@ -150,62 +150,62 @@ export default function AgentPlayground() {
 
   return (
     <div className="space-y-8">
-      {/* Persona Header */}
-      <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl p-6 sm:p-8 text-white shadow-lg">
+      {/* PayPal Navy Persona Header */}
+      <div className="bg-gradient-to-r from-[#001c64] via-[#003087] to-[#0070ba] rounded-3xl p-6 sm:p-8 text-white shadow-pp-hover">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-xs font-semibold tracking-wide text-blue-200 uppercase">
-              <span>🤖 Demo Agent Persona</span>
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/15 rounded-full text-xs font-bold tracking-wide text-sky-100 uppercase">
+              <span>Autonomous Agent Sandbox</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Small Online Seller — Supply Restock Agent
             </h1>
-            <p className="text-blue-100 text-sm leading-relaxed">
-              This autonomous AI agent monitors packaging supplies and attempts replenishment purchases.
-              Every purchase attempt is intercepted by Reins: deterministic rules enforce budget & caps,
-              and Gemini screens descriptions for malicious prompt injection.
+            <p className="text-sky-100 text-sm leading-relaxed">
+              This autonomous AI agent monitors packaging supplies and submits purchase intents.
+              Reins sits between the agent and PayPal: deterministic limits enforce budget & caps,
+              and Gemini 3.6 Flash screens product descriptions for prompt injection.
             </p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl p-4 text-xs space-y-2 min-w-[240px]">
-            <div className="font-semibold text-white uppercase tracking-wider text-[11px]">
+          <div className="bg-white/10 backdrop-blur border border-white/20 rounded-2xl p-4 text-xs space-y-2 min-w-[260px]">
+            <div className="font-bold text-white uppercase tracking-wider text-[11px] border-b border-white/15 pb-1.5">
               Policy Enforcement Matrix
             </div>
-            <div className="flex justify-between text-blue-200">
+            <div className="flex justify-between text-sky-100">
               <span>Clean Order:</span>
-              <span className="font-bold text-emerald-400">Approved & Charged</span>
+              <span className="font-bold text-emerald-300">Approved & Charged</span>
             </div>
-            <div className="flex justify-between text-blue-200">
-              <span>Over Cap (&gt;$50):</span>
-              <span className="font-bold text-rose-400">Blocked</span>
+            <div className="flex justify-between text-sky-100">
+              <span>Over Cap (&gt;${selectedMandate?.per_purchase_cap ?? 100}):</span>
+              <span className="font-bold text-rose-300">Blocked</span>
             </div>
-            <div className="flex justify-between text-blue-200">
+            <div className="flex justify-between text-sky-100">
               <span>Prompt Injection:</span>
-              <span className="font-bold text-rose-400">Blocked (Gemini Guard)</span>
+              <span className="font-bold text-rose-300">Blocked (Gemini Guard)</span>
             </div>
-            <div className="flex justify-between text-blue-200">
-              <span>High Value (&gt;$30):</span>
-              <span className="font-bold text-amber-300">Escalated to Human</span>
+            <div className="flex justify-between text-sky-100">
+              <span>High Value (&gt;${selectedMandate?.escalate_above ?? 50}):</span>
+              <span className="font-bold text-[#ffc439]">Escalated to Human</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Mandate Selection & Quick Actions */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+      {/* Mandate Selection & Funding Source Card */}
+      <div className="bg-white border border-[#e5e9f0] rounded-2xl p-6 shadow-pp-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Select Mandate for Agent</h2>
-            <p className="text-xs text-gray-500">
-              The agent presents this mandate's HMAC-signed JWT token on each purchase attempt.
+            <h2 className="text-base font-bold text-[#003087]">Active Payment Mandate</h2>
+            <p className="text-xs text-[#5c6a82] mt-0.5">
+              The agent presents this mandate's HMAC-signed JWT token on each purchase attempt — never raw PayPal credentials.
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <select
               value={selectedMandateId ?? ''}
               onChange={(e) => setSelectedMandateId(Number(e.target.value))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="border border-[#d6dce5] rounded-full px-4 py-2 text-xs sm:text-sm font-semibold text-[#003087] bg-white focus:outline-none focus:ring-2 focus:ring-[#0070ba]"
             >
               {mandates.map((m) => (
                 <option key={m.id} value={m.id}>
@@ -216,7 +216,7 @@ export default function AgentPlayground() {
 
             <button
               onClick={handleQuickCreateMandate}
-              className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-semibold transition"
+              className="px-4 py-2 bg-[#f5f7fa] hover:bg-[#e8edf5] border border-[#e5e9f0] text-[#003087] rounded-full text-xs font-bold transition"
             >
               + Quick Restock Mandate
             </button>
@@ -224,34 +224,40 @@ export default function AgentPlayground() {
         </div>
 
         {selectedMandate && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-gray-100 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 pt-4 border-t border-[#eef2f6] text-xs">
             <div>
-              <span className="text-gray-400 block">Status:</span>
+              <span className="text-[#5c6a82] block font-medium">Status</span>
               <span
-                className={`font-semibold capitalize px-2 py-0.5 rounded text-[11px] inline-block mt-0.5 ${
+                className={`font-bold capitalize px-2.5 py-0.5 rounded-full text-[11px] inline-block mt-1 ${
                   selectedMandate.status === 'active'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-800 border border-amber-200'
                 }`}
               >
-                {selectedMandate.status}
+                {selectedMandate.status === 'active' ? 'Active (PayPal Vault)' : selectedMandate.status}
               </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Budget Total:</span>
-              <span className="font-bold text-gray-800">${selectedMandate.budget_total.toFixed(2)}</span>
+              <span className="text-[#5c6a82] block font-medium">Budget Total</span>
+              <span className="font-extrabold text-sm text-[#003087] tabular-nums mt-0.5 block">
+                ${selectedMandate.budget_total.toFixed(2)}
+              </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Spent:</span>
-              <span className="font-bold text-indigo-600">${selectedMandate.budget_spent.toFixed(2)}</span>
+              <span className="text-[#5c6a82] block font-medium">Spent</span>
+              <span className="font-extrabold text-sm text-[#0070ba] tabular-nums mt-0.5 block">
+                ${selectedMandate.budget_spent.toFixed(2)}
+              </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Per-Purchase Cap:</span>
-              <span className="font-bold text-gray-800">${selectedMandate.per_purchase_cap.toFixed(2)}</span>
+              <span className="text-[#5c6a82] block font-medium">Per-Purchase Cap</span>
+              <span className="font-extrabold text-sm text-[#0c1c3e] tabular-nums mt-0.5 block">
+                ${selectedMandate.per_purchase_cap.toFixed(2)}
+              </span>
             </div>
             <div>
-              <span className="text-gray-400 block">Escalate Threshold:</span>
-              <span className="font-bold text-amber-700">
+              <span className="text-[#5c6a82] block font-medium">Escalate Above</span>
+              <span className="font-extrabold text-sm text-amber-700 tabular-nums mt-0.5 block">
                 {selectedMandate.escalate_above ? `$${selectedMandate.escalate_above.toFixed(2)}` : 'None'}
               </span>
             </div>
@@ -260,37 +266,39 @@ export default function AgentPlayground() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-5 py-3.5 rounded-2xl text-sm flex items-center justify-between shadow-sm">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 font-bold ml-4">
+          <button onClick={() => setError(null)} className="text-rose-500 hover:text-rose-700 font-bold ml-4">
             ×
           </button>
         </div>
       )}
 
       {successMsg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
-          <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-500 hover:text-emerald-700 font-bold ml-4">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 px-5 py-3.5 rounded-2xl text-sm flex items-center justify-between shadow-sm">
+          <span className="font-medium">{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-600 hover:text-emerald-800 font-bold ml-4">
             ×
           </button>
         </div>
       )}
 
       {/* Autonomous AI Agent Goal Box */}
-      <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200/80 rounded-2xl p-6 shadow-sm space-y-4">
+      <div className="bg-white border border-[#b6dcf7] rounded-2xl p-6 shadow-pp-card space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl">🤖</span>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#e8f4fd] text-[#003087] flex items-center justify-center text-xl">
+              🤖
+            </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Autonomous AI Purchasing Agent (Gemini 3.6 Flash)</h2>
-              <p className="text-xs text-gray-600">
-                Gemini reads the supplier catalog and descriptions, plans restocking purchases, and submits them through Reins guardrails.
+              <h2 className="text-base font-bold text-[#003087]">Autonomous AI Purchasing Agent (Gemini 3.6 Flash)</h2>
+              <p className="text-xs text-[#5c6a82]">
+                Gemini reads the supplier catalog and descriptions, decides what to buy, and submits orders through Reins guardrails.
               </p>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-semibold self-start sm:self-auto border border-indigo-200">
-            <span>✨</span> Gemini-Driven
+          <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-[#f0f7fc] text-[#003087] font-bold self-start sm:self-auto border border-[#b6dcf7]">
+            ✨ Gemini-Driven
           </span>
         </div>
 
@@ -300,12 +308,12 @@ export default function AgentPlayground() {
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             placeholder="Operational goal for the shopping agent..."
-            className="flex-1 px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-inner"
+            className="flex-1 px-4 py-2.5 bg-[#f5f7fa] border border-[#d6dce5] rounded-full text-sm font-medium text-[#0c1c3e] focus:bg-white focus:ring-2 focus:ring-[#0070ba] focus:outline-none"
           />
           <button
             onClick={handleRunAiAgent}
             disabled={isAiRunning || isRunning || !selectedMandate}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2 whitespace-nowrap"
+            className="px-6 py-2.5 bg-[#0070ba] hover:bg-[#005ea6] disabled:opacity-50 text-white font-bold text-sm rounded-full shadow-sm transition flex items-center justify-center gap-2 whitespace-nowrap"
           >
             <span>{isAiRunning ? '🧠' : '✨'}</span>
             <span>{isAiRunning ? 'Agent Planning & Buying…' : 'Run AI agent'}</span>
@@ -314,16 +322,16 @@ export default function AgentPlayground() {
       </div>
 
       {/* Catalog Preview */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Supplier Restock Catalog</h2>
-            <p className="text-xs text-gray-500">Items the agent evaluates during its restocking cycle.</p>
+            <h2 className="text-lg font-bold text-[#003087]">Supplier Restock Catalog</h2>
+            <p className="text-xs text-[#5c6a82]">Listings inspected by the AI agent and screened by Reins.</p>
           </div>
           <button
             onClick={() => handleRunAgent()}
             disabled={isRunning || isAiRunning || !selectedMandate}
-            className="px-4 py-2 bg-gray-900 hover:bg-black disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-2 self-start sm:self-auto"
+            className="px-5 py-2 bg-[#003087] hover:bg-[#001c64] disabled:opacity-50 text-white font-bold text-xs rounded-full shadow-sm transition flex items-center gap-2 self-start sm:self-auto"
           >
             <span>{isRunning ? '⏳' : '▶'}</span>
             <span>{isRunning ? 'Running Scripted…' : 'Run scripted demo (4 scenarios)'}</span>
@@ -336,42 +344,44 @@ export default function AgentPlayground() {
             return (
               <div
                 key={item.id}
-                className={`bg-white rounded-xl border p-4 shadow-sm flex flex-col justify-between transition ${
-                  isMalicious ? 'border-rose-300 ring-1 ring-rose-200' : 'border-gray-200 hover:border-gray-300'
+                className={`bg-white rounded-2xl border p-5 shadow-pp-card flex flex-col justify-between transition hover:shadow-pp-hover ${
+                  isMalicious ? 'border-rose-300 ring-1 ring-rose-100' : 'border-[#e5e9f0]'
                 }`}
               >
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700 uppercase tracking-wider">
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f5f7fa] text-[#5c6a82] uppercase tracking-wider">
                       {item.category.replace('_', ' ')}
                     </span>
-                    <span className="font-extrabold text-sm text-gray-900">
+                    <span className="font-extrabold text-sm text-[#003087] tabular-nums">
                       ${item.price.toFixed(2)}
                     </span>
                   </div>
 
-                  <h3 className="font-bold text-gray-900 text-sm leading-snug">{item.name}</h3>
-                  <div className="text-xs text-gray-500">Supplier: <span className="font-medium text-gray-700">{item.merchant}</span></div>
+                  <h3 className="font-bold text-[#0c1c3e] text-sm leading-snug">{item.name}</h3>
+                  <div className="text-xs text-[#5c6a82]">
+                    Supplier: <span className="font-semibold text-[#0c1c3e]">{item.merchant}</span>
+                  </div>
 
-                  <p className="text-xs text-gray-600 line-clamp-3" title={item.description}>
+                  <p className="text-xs text-[#5c6a82] line-clamp-3 leading-relaxed" title={item.description}>
                     {item.description}
                   </p>
 
                   {isMalicious && (
-                    <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 text-[11px] text-rose-800 font-medium">
+                    <div className="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-[11px] text-rose-800 font-semibold">
                       ⚠️ {item.injection_warning}
                     </div>
                   )}
                 </div>
 
-                <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-[11px] text-gray-500 capitalize">
-                    Expected: <strong className="text-gray-800">{item.expected_decision}</strong>
+                <div className="pt-3 mt-4 border-t border-[#eef2f6] flex items-center justify-between">
+                  <span className="text-[11px] text-[#5c6a82] capitalize">
+                    Expected: <strong className="text-[#0c1c3e]">{item.expected_decision}</strong>
                   </span>
                   <button
                     onClick={() => handleRunAgent(item.scenario)}
                     disabled={isRunning}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                    className="text-xs text-[#0070ba] hover:text-[#003087] font-bold"
                   >
                     Run item →
                   </button>
@@ -387,69 +397,69 @@ export default function AgentPlayground() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Agent Decision Feed</h2>
-              <p className="text-xs text-gray-500">
-                Live output from policy engine, Gemini semantic checks, and PayPal Vault charges.
+              <h2 className="text-lg font-bold text-[#003087]">Agent Decision Feed</h2>
+              <p className="text-xs text-[#5c6a82]">
+                Live agent intent paired with Reins policy decisions and PayPal Vault captures.
               </p>
             </div>
-            <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-              {results.filter((r) => r.passed_expected).length} / {results.length} Scenarios Matched Expectation
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3.5 py-1 rounded-full border border-emerald-200">
+              {results.filter((r) => r.passed_expected).length} / {results.length} Matched Expected
             </span>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {results.map((r, idx) => {
               const badgeColors: Record<string, string> = {
-                approved: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-                blocked: 'bg-rose-100 text-rose-800 border-rose-200',
-                escalated: 'bg-amber-100 text-amber-900 border-amber-200',
+                approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                blocked: 'bg-rose-50 text-rose-700 border-rose-200',
+                escalated: 'bg-amber-50 text-amber-800 border-amber-200',
               }
 
               return (
                 <div
                   key={idx}
-                  className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-3"
+                  className="bg-white border border-[#e5e9f0] rounded-2xl p-5 shadow-pp-card space-y-3.5"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm text-gray-900">{r.name}</span>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="font-bold text-sm text-[#003087]">{r.name}</span>
                       <span
-                        className={`text-xs uppercase font-extrabold px-2.5 py-0.5 rounded-full border ${
+                        className={`text-[11px] uppercase font-bold px-2.5 py-0.5 rounded-full border ${
                           badgeColors[r.actual_decision] ?? 'bg-gray-100 text-gray-700'
                         }`}
                       >
                         {r.actual_decision}
                       </span>
                       {r.injection_flag && (
-                        <span className="text-xs font-bold px-2 py-0.5 bg-rose-600 text-white rounded">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 bg-rose-600 text-white rounded-full">
                           🚨 INJECTION INTERCEPTED
                         </span>
                       )}
                     </div>
 
-                    <div className="text-sm font-semibold text-gray-800">
-                      ${r.amount.toFixed(2)} USD • <span className="text-gray-500">{r.merchant}</span>
+                    <div className="text-sm font-extrabold text-[#003087] tabular-nums">
+                      ${r.amount.toFixed(2)} USD • <span className="text-[#5c6a82] font-semibold">{r.merchant}</span>
                     </div>
                   </div>
 
                   {/* Agent reasoning vs Reins decision */}
-                  <div className="space-y-2 pt-1 text-xs">
+                  <div className="space-y-2.5 pt-1 text-xs">
                     {r.agent_reasoning && (
-                      <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-lg p-3 text-indigo-950 flex items-start gap-2.5">
+                      <div className="bg-[#f0f7fc] border border-[#dceefa] rounded-xl p-3.5 text-[#003087] flex items-start gap-2.5">
                         <span className="text-base leading-none">🤖</span>
                         <div className="space-y-0.5">
-                          <span className="font-bold text-indigo-900">Agent wanted {r.item} because:</span>
-                          <p className="text-indigo-900/90 italic">"{r.agent_reasoning}"</p>
+                          <span className="font-bold text-[#003087]">Agent wanted {r.item} because:</span>
+                          <p className="text-[#0c1c3e] italic">"{r.agent_reasoning}"</p>
                         </div>
                       </div>
                     )}
 
-                    <div className={`rounded-lg p-3 flex items-start gap-2.5 border ${
+                    <div className={`rounded-xl p-3.5 flex items-start gap-2.5 border ${
                       r.actual_decision === 'approved'
-                        ? 'bg-emerald-50/90 text-emerald-950 border-emerald-200'
+                        ? 'bg-emerald-50/80 text-emerald-950 border-emerald-200'
                         : r.actual_decision === 'escalated'
-                        ? 'bg-amber-50/90 text-amber-950 border-amber-200'
-                        : 'bg-rose-50/90 text-rose-950 border-rose-200'
+                        ? 'bg-amber-50/80 text-amber-950 border-amber-200'
+                        : 'bg-rose-50/80 text-rose-950 border-rose-200'
                     }`}>
                       <span className="text-base leading-none">
                         {r.actual_decision === 'approved' ? '🛡️' : r.actual_decision === 'escalated' ? '⚖️' : '🚫'}
@@ -458,17 +468,17 @@ export default function AgentPlayground() {
                         <span className="font-bold">
                           Reins {r.actual_decision === 'approved' ? 'APPROVED' : r.actual_decision === 'escalated' ? 'ESCALATED' : 'BLOCKED'} because:
                         </span>
-                        <p className="font-medium">
+                        <p className="font-medium leading-relaxed">
                           {r.reasons.length > 0 ? r.reasons.join(' • ') : r.message}
                         </p>
                       </div>
                     </div>
 
                     {/* Metadata & Actions */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 pt-1 font-mono">
-                      <span>Category: <strong className="text-gray-700 font-sans">{r.category}</strong></span>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-[#5c6a82] pt-1 font-mono">
+                      <span>Category: <strong className="text-[#0c1c3e] font-sans">{r.category}</strong></span>
                       {r.paypal_capture_id && (
-                        <span className="text-emerald-700">
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                           PayPal Capture: <strong>{r.paypal_capture_id}</strong>
                         </span>
                       )}
@@ -485,9 +495,9 @@ export default function AgentPlayground() {
                           href={r.approve_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow transition"
+                          className="inline-flex items-center gap-1.5 px-5 py-2 bg-[#ffc439] hover:bg-[#f2b82b] text-[#003087] font-bold text-xs rounded-full shadow-sm transition"
                         >
-                          <span>💳</span> Approve in PayPal (Fallback Mode) →
+                          Approve in PayPal (Fallback Mode) →
                         </a>
                       </div>
                     )}
@@ -501,14 +511,14 @@ export default function AgentPlayground() {
 
       {/* Escalations Inbox */}
       {escalations.length > 0 && (
-        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-6 space-y-4">
+        <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-6 space-y-4 shadow-pp-card">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span className="text-2xl">📬</span>
               <div>
-                <h2 className="text-lg font-bold text-amber-950">Escalations Inbox ({escalations.length})</h2>
+                <h2 className="text-base font-bold text-amber-950">Escalations Inbox ({escalations.length})</h2>
                 <p className="text-xs text-amber-800">
-                  Agent purchases held for one-tap human authorization before PayPal execution.
+                  Agent purchases held for one-tap human authorization before PayPal capture.
                 </p>
               </div>
             </div>
@@ -518,43 +528,43 @@ export default function AgentPlayground() {
             {escalations.map((esc) => (
               <div
                 key={esc.id}
-                className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm flex flex-col justify-between space-y-3"
+                className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3"
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-gray-900">
+                    <span className="font-bold text-sm text-[#003087]">
                       Escalation #{esc.id}
                     </span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800 uppercase">
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 uppercase">
                       {esc.status}
                     </span>
                   </div>
 
                   {esc.receipt && (
-                    <div className="text-xs text-gray-600 space-y-1">
-                      <div className="font-medium text-gray-900">
+                    <div className="text-xs text-[#5c6a82] space-y-1.5">
+                      <div className="font-bold text-[#0c1c3e]">
                         {esc.receipt.item} (${esc.receipt.amount.toFixed(2)})
                       </div>
                       <div>Merchant: {esc.receipt.merchant}</div>
-                      <div className="text-amber-800 bg-amber-50 p-2 rounded">
+                      <div className="text-amber-900 bg-amber-50 border border-amber-100 p-2.5 rounded-xl">
                         {esc.receipt.reasons.join(', ')}
                       </div>
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-2.5 pt-3 border-t border-[#eef2f6]">
                   <button
                     onClick={() => handleApproveEscalation(esc.id)}
-                    className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition"
+                    className="flex-1 py-2 bg-[#ffc439] hover:bg-[#f2b82b] text-[#003087] font-bold text-xs rounded-full shadow-sm transition"
                   >
-                    ✓ Approve & Charge
+                    Approve & Charge PayPal
                   </button>
                   <button
                     onClick={() => handleDenyEscalation(esc.id)}
-                    className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-lg transition"
+                    className="px-4 py-2 bg-[#f5f7fa] hover:bg-gray-200 text-[#0c1c3e] font-semibold text-xs rounded-full transition"
                   >
-                    ✕ Deny
+                    Deny
                   </button>
                 </div>
               </div>
